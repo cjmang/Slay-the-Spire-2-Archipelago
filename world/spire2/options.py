@@ -195,7 +195,6 @@ class CardReward(Toggle):
 
 class SeededRun(Toggle):
     """Whether each character should have a fixed seed to climb the spire with or not."""
-    visibility = Visibility.none
     display_name = "Seeded Run"
     default = 0
 

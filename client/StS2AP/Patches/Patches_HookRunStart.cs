@@ -30,7 +30,7 @@ namespace StS2AP.Patches
         public static class OnRunPreStart
         {
             [HarmonyPrefix]
-            public static void Prefix(CharacterModel character, ref int ascensionLevel)
+            public static void Prefix(CharacterModel character, ref int ascensionLevel, ref string seed)
             {
                 var officialName = character.GetType().Name;
                 GameUtility.CurrentConfig = ArchipelagoClient.Settings.Characters[officialName];
@@ -42,6 +42,11 @@ namespace StS2AP.Patches
                 {
                     // Not 100% sure this is correct, but in testing this didn't have a negative impact.
                     ascensionLevel = 10;
+                }
+                var configuredSeed = GameUtility.CurrentConfig.Seed;
+                if(configuredSeed != null && configuredSeed.Length > 0)
+                {
+                    seed = configuredSeed;
                 }
             }
         }

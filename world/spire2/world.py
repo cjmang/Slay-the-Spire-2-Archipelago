@@ -147,7 +147,7 @@ class SlayTheSpire2World(World):
             char_offset = character_offset_map[option_name.lower()]
             name = character_list[char_offset - 1]
             if self.options.seeded:
-                seed = "".join(self.random.choice(string.ascii_letters) for i in range(16))
+                seed = "".join(self.random.choice(string.ascii_letters) for i in range(12))
             else:
                 seed = ""
             locked = False if unlocked_char is None or unlocked_char.lower() == option_name.lower() else True
