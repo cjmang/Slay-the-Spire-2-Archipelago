@@ -32,7 +32,10 @@ class CharacterConfig:
         self.option_name: str = option_name
         self.mod_num = mod_num
         self.char_offset: int = char_offset
-        self.official_name: str = official_names[char_offset - 1]
+        if self.mod_num == 0:
+            self.official_name: str = official_names[char_offset - 1]
+        else:
+            self.official_name = option_name
         self.seed: str = seed
         self.locked: bool = locked
         self.ascension: List[str] = kwargs['ascension']

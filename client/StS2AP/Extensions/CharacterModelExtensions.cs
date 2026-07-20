@@ -18,17 +18,34 @@ namespace StS2AP.Extensions
         /// <example>An Ironclad instance returns "Ironclad", because items for that character include "Ironclad Card Reward", "Ironclad Relic", etc.</example>
         public static string APName(this CharacterModel character)
         {
-            return character.GetType().Name;
+            return character.Id.Entry;
         }
 
-        /// <summary>
-        /// Gets the `APItemCharID` for this character.
-        /// For Items, this is one-based.
-        /// </summary>
-        public static APItemCharID? GetAPItemCharID(this CharacterModel character)
+        // /// <summary>
+        // /// Gets the `APItemCharID` for this character.
+        // /// For Items, this is one-based.
+        // /// </summary>
+        // public static APItemCharID? GetAPItemCharID(this CharacterModel character)
+        // {
+        //     return GameUtility.GetCharacterIDByName(character.APName());
+        // }
+
+        public static long? GetCharacterOffset(this CharacterModel character)
         {
-            return GameUtility.GetCharacterIDByName(character.APName());
+            var config = ArchipelagoClient.Settings.Characters[character.Id.Entry];
+            if (config != null)
+            {
+                return config.CharOffset;
+            }
+            else
+            {
+                var msg = $"Character {character.APName()} does not have a valid Character Offset.";
+                LogUtility.Error(msg);
+                // throw new NullReferenceException(msg);
+                return null;
+            }
         }
+
 
         /// <summary>
         /// Gets the Location ID offset used for this character.
@@ -36,10 +53,10 @@ namespace StS2AP.Extensions
         /// </summary>
         public static long GetAPLocationCharID(this CharacterModel character)
         {
-            var charId = character.GetAPItemCharID();
-            if (charId.HasValue)
+            var config = ArchipelagoClient.Settings.Characters[character.Id.Entry];
+            if (config != null)
             {
-                return (long)charId.Value - 1;
+                return config.CharOffset;
             }
             else
             {

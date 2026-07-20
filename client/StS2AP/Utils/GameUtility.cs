@@ -83,37 +83,38 @@ namespace StS2AP.Utils
         /// <summary>
         /// Returns the Current Player's `APItemCharID`
         /// </summary>
-        public static APItemCharID? CurrentCharacterID
+        public static long? CurrentCharacterID
         {
             get
             {
-                if (CurrentPlayer == null)
+                if (CurrentConfig == null)
                 {
                     LogUtility.Warn("Attempted to get CurrentCharacterID but there is no active player");
                     return null;
                 }
-                var charName = CurrentPlayer.APName();
-                return GetCharacterIDByName(charName);
+                return CurrentConfig.CharOffset;
+                // var charName = CurrentPlayer.APName();
+                // return GetCharacterIDByName(charName);
             }
         }
 
-        /// <summary>
-        /// Gets the `APItemCharID` for a character by their AP Name.
-        /// </summary>
-        /// <param name="name">The name of a character, as recognized by the Archipelago World. Usually found by calling `.APName()` on a `CharacterModel` or `Player`.</param>
-        /// <returns>The `APItemCharID` for a given character, by it's name. Returns `null` if the character name is invalid or unknown.</returns>
-        public static APItemCharID? GetCharacterIDByName(string name)
-        {
-            return name switch
-            {
-                "Ironclad" => APItemCharID.Ironclad,
-                "Silent" => APItemCharID.Silent,
-                "Defect" => APItemCharID.Defect,
-                "Regent" => APItemCharID.Regent,
-                "Necrobinder" => APItemCharID.Necrobinder,
-                _ => null
-            };
-        }
+        // /// <summary>
+        // /// Gets the `APItemCharID` for a character by their AP Name.
+        // /// </summary>
+        // /// <param name="name">The name of a character, as recognized by the Archipelago World. Usually found by calling `.APName()` on a `CharacterModel` or `Player`.</param>
+        // /// <returns>The `APItemCharID` for a given character, by it's name. Returns `null` if the character name is invalid or unknown.</returns>
+        // public static APItemCharID? GetCharacterIDByName(string name)
+        // {
+        //     return name switch
+        //     {
+        //         "Ironclad" => APItemCharID.Ironclad,
+        //         "Silent" => APItemCharID.Silent,
+        //         "Defect" => APItemCharID.Defect,
+        //         "Regent" => APItemCharID.Regent,
+        //         "Necrobinder" => APItemCharID.Necrobinder,
+        //         _ => null
+        //     };
+        // }
 
         #region Receiving Items
 
@@ -345,28 +346,35 @@ namespace StS2AP.Utils
         public static void UnlockCharacter(ItemInfo item)
         {
             CharacterModel? characterToUnlock = null;
-            switch(item.GetStSCharID())
+            switch(item.GetCharacterOffset())
             {
-                case APItemCharID.Ironclad:
+                case (int) APItemCharID.Ironclad:
                     characterToUnlock = ModelDb.Character<Ironclad>();
                     break;
-                case APItemCharID.Silent:
+                case (int) APItemCharID.Silent:
                     characterToUnlock = ModelDb.Character<Silent>();
                     break;
-                case APItemCharID.Defect:
+                case (int) APItemCharID.Defect:
                     characterToUnlock = ModelDb.Character<Defect>();
                     break;
-                case APItemCharID.Regent:
+                case (int) APItemCharID.Regent:
                     characterToUnlock = ModelDb.Character<Regent>();
                     break;
-                case APItemCharID.Necrobinder:
+                case (int) APItemCharID.Necrobinder:
                     characterToUnlock = ModelDb.Character<Necrobinder>();
+                    break;
+                default:
+                    var config = ArchipelagoClient.Settings.Characters.Values.FirstOrDefault(c => c.CharOffset == item.GetCharacterOffset());
+                    if(config != null)
+                    {
+                        characterToUnlock = ModelDb.AllCharacters.FirstOrDefault(c => string.Equals(c.Id.Entry, config.OfficialName, StringComparison.OrdinalIgnoreCase));
+                    }
                     break;
             }
 
             if(characterToUnlock == null)
             {
-                LogUtility.Warn($"Could not find character to unlock for item {item.ItemName} (Char ID Parsed: {item.GetStSCharID().ToString()})");
+                LogUtility.Warn($"Could not find character to unlock for item {item.ItemName} (Char ID Parsed: {item.GetCharacterOffset()})");
                 return;
             }
 
@@ -504,7 +512,7 @@ namespace StS2AP.Utils
                     return;
                 }
 
-                var charName = CurrentPlayer.APName();
+                var charName = CurrentPlayer.getInternalName();
                 const string storageKey = "StS2AP_GoaledChars";
                 LogUtility.Debug($"TrySetGoalAchieved: charName - {charName}");
 
@@ -602,8 +610,7 @@ namespace StS2AP.Utils
                 if (!ArchipelagoClient.CheckedLocations.Contains(locationId) && locationId != -1 && ArchipelagoClient.ScoutedLocations.ContainsKey(locationId))
                 {
                     // Check the location off and let the server know
-                    ArchipelagoClient.CheckedLocations.Add(locationId);
-                    await ArchipelagoClient.Session.Locations.CompleteLocationChecksAsync(locationId);
+                    GameUtility.SendCheck(locationId);
                 }
             }
 
@@ -629,6 +636,11 @@ namespace StS2AP.Utils
 
         public static void SendCheck(long locationId)
         {
+            SendCheck(locationId, true);
+        }
+
+        private static void SendCheck(long locationId, bool includeUnrecognizedChars)
+        {
             if (!ArchipelagoClient.CheckedLocations.Contains(locationId) && locationId != -1 && ArchipelagoClient.ScoutedLocations.ContainsKey(locationId))
             {
                 // Check the location off and let the server know
@@ -636,6 +648,14 @@ namespace StS2AP.Utils
                 _ = ArchipelagoClient.Session.Locations.CompleteLocationChecksAsync(locationId);
 
                 LogUtility.Success($"Sent location check: {locationId}");
+            }
+            if(includeUnrecognizedChars)
+            {
+                foreach(var otherChar in ArchipelagoClient.Settings.UnrecognizedCharacters.Values)
+                {
+                    long newLocationId = (locationId / 10000L) + (10000L * otherChar.CharOffset);
+                    SendCheck(newLocationId, false);
+                }
             }
         }
 

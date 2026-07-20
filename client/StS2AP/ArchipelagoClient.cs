@@ -598,8 +598,14 @@ namespace StS2AP
                         // Fire the CharacterUnlocked event on the Godot main thread.
                         // This allows the character select screen (if open) to immediately
                         // refresh the appropriate button without waiting for OnSubmenuOpened.
-                        var charId = item.GetStSCharID();
-                        Callable.From(() => CharacterUnlocked?.Invoke(charId)).CallDeferred();
+                        var offset = item.GetCharacterOffset();
+                        var config = ArchipelagoClient.Settings.Characters.Values.FirstOrDefault(config => config.CharOffset == offset);
+                        if(config == null)
+                        {
+                            LogUtility.Warn($"Got Unlock for character not configured {item.ItemId}");
+                            break;
+                        }
+                        Callable.From(() => CharacterUnlocked?.Invoke(config)).CallDeferred();
 
                         break;
                     }
@@ -609,7 +615,7 @@ namespace StS2AP
                     {
                         // Get the IDs for storing the item
                         var itemId = item.GetRawItemID();
-                        var playerId = item.GetStSCharID();
+                        var offset = item.GetCharacterOffset();
 
                         // Add the Smith/Rest to the amount we've received for this character
                         var source = itemId == APItem.ProgressiveSmith ? Progress.ProgressiveSmiths : Progress.ProgressiveRests;
@@ -617,10 +623,10 @@ namespace StS2AP
                         // Increment the reward
                         try
                         {
-                            var haveKey = source.TryGetValue(playerId, out int amount);
+                            var haveKey = source.TryGetValue(offset, out int amount);
                             if (!haveKey) amount = 0;
-                            source[playerId] = amount + 1;
-                            LogUtility.Success($"New Value for {(itemId == APItem.ProgressiveSmith ? "ProgressiveSmiths" : "ProgressiveRests")} is {source[playerId]}");
+                            source[offset] = amount + 1;
+                            LogUtility.Success($"New Value for {(itemId == APItem.ProgressiveSmith ? "ProgressiveSmiths" : "ProgressiveRests")} is {source[offset]}");
                         }
                         catch (KeyNotFoundException e)
                         {
@@ -641,15 +647,15 @@ namespace StS2AP
                 case APItem.BossGold:
                     {
                         // Get the IDs for storing the item
-                        var playerId = item.GetStSCharID();
+                        var charOffset = item.GetCharacterOffset();
                         var itemId = item.GetRawItemID();
 
                         // Add the Gold to the amount we've received
                         try
                         {
-                            var haveKey = Progress.GoldReceived.TryGetValue(playerId, out int gold);
+                            var haveKey = Progress.GoldReceived.TryGetValue(charOffset, out int gold);
                             if (!haveKey) gold = 0;
-                            Progress.GoldReceived[playerId] = gold + ItemTable.GoldItemAmounts[itemId];
+                            Progress.GoldReceived[charOffset] = gold + ItemTable.GoldItemAmounts[itemId];
                         }
                         catch (KeyNotFoundException e)
                         {
@@ -750,7 +756,15 @@ namespace StS2AP
                         }
                     }
                 }
-
+                
+                foreach(var config in settings.Characters.Values)
+                {
+                    var model = ModelDb.AllCharacters.FirstOrDefault(model => string.Equals(model.Id.Entry, config.OfficialName, StringComparison.OrdinalIgnoreCase));
+                    if(model == null)
+                    {
+                        settings.UnrecognizedCharacters[config.OfficialName] = config;
+                    }
+                }
                 
             }
 
@@ -775,9 +789,9 @@ namespace StS2AP
 
         /// <summary>
         /// Fires when a character unlock item is received and processed.
-        /// Passes the <see cref="APItemCharID"/> of the character that was just unlocked.
+        /// Passes the <see cref="CharacterConfig"/> of the character that was just unlocked.
         /// Always dispatched on the Godot main thread via CallDeferred so UI can safely respond.
         /// </summary>
-        public static event Action<APItemCharID> CharacterUnlocked;
+        public static event Action<CharacterConfig> CharacterUnlocked;
     }
 }

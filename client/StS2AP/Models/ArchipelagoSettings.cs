@@ -39,7 +39,13 @@ namespace StS2AP.Models
         /// This is *not* a collection of which characters are unlocked, just which characters *can* be unlocked for this slot.
         /// Official Name -> CharacterConfig
         /// </summary>
-        public Dictionary<String, CharacterConfig> Characters { get; set;} = new Dictionary<String, CharacterConfig>();
+        public Dictionary<String, CharacterConfig> Characters { get; set;} = new Dictionary<String, CharacterConfig>(StringComparer.InvariantCultureIgnoreCase);
+
+        /// <summary>
+        /// The collection of characters that are unrecognized by the mod.  Needed so we can send out unlocks.
+        /// </summary>
+        public Dictionary<String, CharacterConfig> UnrecognizedCharacters { get; set; } = new Dictionary<String, CharacterConfig>(StringComparer.InvariantCultureIgnoreCase);
+
         public bool CampfireSanity { get; set; }
         public bool GoldSanity { get; set; }
         public bool PotionSanity { get; set; }
