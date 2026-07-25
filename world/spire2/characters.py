@@ -40,7 +40,10 @@ class CharacterConfig:
         self.locked: bool = locked
         self.ascension: List[str] = kwargs['ascension']
         # Doesn't need to make it to the mod
-        self.ascension_down: List[str] = kwargs['ascension_down']
+        if 'ascension_down' in kwargs:
+            self.ascension_down: List[str] = kwargs['ascension_down']
+        else:
+            self.ascension_down = []
 
     def to_dict(self) -> dict[str, Any]:
         return {

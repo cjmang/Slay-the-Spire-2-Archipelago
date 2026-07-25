@@ -518,7 +518,6 @@ class SlayTheSpire2World(World):
                 char_dict['seed'],
                 char_dict['locked'],
                 ascension=char_dict['ascension'],
-                ascension_down=char_dict['ascension_down'],
             )
             self.characters.append(config)
             if char_dict['mod_num'] > 0:
@@ -541,13 +540,13 @@ class SlayTheSpire2World(World):
             if key < (len(character_list)) * CHAR_OFFSET:
                 continue
             modded_index = (key // CHAR_OFFSET) - len(character_list)
-            self.logger.info(f"Modded index: {modded_index}")
-            self.logger.info(f"modded_chars index: {self.modded_chars}")
+            # self.logger.info(f"Modded index: {modded_index}")
+            # self.logger.info(f"modded_chars index: {self.modded_chars}")
             if modded_index >= len(self.modded_chars):
                 continue
             match = pattern.match(value)
             if match is None:
                 raise Exception("Failed to match " + value)
             name = self.modded_chars[modded_index].official_name
-            self.logger.info(name)
+            # self.logger.info(name)
             self.location_id_to_alias[key] = name + " " + match.group("location_name")
