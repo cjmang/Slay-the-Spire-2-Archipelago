@@ -1,5 +1,6 @@
 ﻿using Godot;
 using HarmonyLib;
+using MegaCrit.Sts2.Core.Localization;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Nodes.Screens.CharacterSelect;
 using MegaCrit.Sts2.Core.Unlocks;
@@ -28,39 +29,7 @@ namespace StS2AP.Patches
                 LogUtility.Debug($"OverrideUnlockedCharacterData: Overriding unlocked characters. UnlockedCharacters count: {ArchipelagoClient.Progress.UnlockedCharacters.Count}");
                 foreach (var c in ArchipelagoClient.Progress.UnlockedCharacters)
                     LogUtility.Debug($"OverrideUnlockedCharacterData: Unlocked character in progress: {c.Id.Entry}");
-                var ids = new HashSet<string>(ArchipelagoClient.Progress.UnlockedCharacters.Select(c => c.Id.Entry));
-                bool someoneUnlocked = false;
-                foreach(var c in __result)
-                {
-                    if(ids.Contains(c.Id.Entry))
-                    {
-                        someoneUnlocked = true;
-                        break;
-                    }
-                }
-                if (!someoneUnlocked)
-                {
-                    // Probably someone didn't enter a modded character id correctly
-                    // This is a failsafe to hopefully unlock *someone*
-                    var newResult = new List<CharacterModel>();
-                    foreach (var c in __result)
-                    {
-                        if (ArchipelagoClient.Settings.Characters.ContainsKey(c.Id.Entry))
-                        {
-                            newResult.Add(c);
-                            break;
-                        }
-                    }
-                    if(newResult.Count == 0)
-                    {
-                        LogUtility.Error($"No valid AP characters found to unlock!  Valid characters: {string.Join(",", ids)}");
-                    }
-                    __result = newResult;
-                }
-                else
-                {
-                    __result = ArchipelagoClient.Progress.UnlockedCharacters;
-                }
+                __result = ArchipelagoClient.Progress.UnlockedCharacters;
             }
         }
 
@@ -96,11 +65,12 @@ namespace StS2AP.Patches
                     var charModel = button.Character;
                     LogUtility.Info($"Character Model id: {charModel.Id.Entry}");
                     var name = charModel.Id.Entry;
-                    LogUtility.Debug($"OverrideCharacterSelectMenuOptions: Checking button with character '{name}'");
+                    LogUtility.Info($"OverrideCharacterSelectMenuOptions: Checking button with character '{name}'");
 
                     // Hide any character that isn't in the available characters list for this Archipelago slot
-                    bool isVisible = ArchipelagoClient.Settings.Characters.Keys.Contains(name);
-                    LogUtility.Debug($"OverrideCharacterSelectMenuOptions: '{name}' isVisible={isVisible}");
+                    bool isVisible = ArchipelagoClient.Settings.Characters.ContainsKey(name);
+                    LogUtility.Info($"OverrideCharacterSelectMenuOptions: '{name}' isVisible={isVisible}");
+                    LogUtility.Info($"Current Configured Characters: {string.Join(",", ArchipelagoClient.Settings.Characters.Keys)}");
 
                     if (!isVisible)
                     {
@@ -247,6 +217,28 @@ namespace StS2AP.Patches
                 {
                     LogUtility.Debug("UnsubscribeFromUnlockEventOnClose: No handler found in dictionary for this instance — nothing to unsubscribe");
                 }
+            }
+        }
+
+        [HarmonyPatch(typeof(CharacterModel), nameof(CharacterModel.GetUnlockText))]
+        public static class OverrideUnlockText
+        {
+            [HarmonyPrefix]
+            public static bool Prefix(ref LocString __result)
+            {
+                __result = new LocString("characters", "APCHARACTER.unlockText");
+
+                return false;
+            }
+        }
+
+        [HarmonyPatch(typeof(NCharacterSelectScreen), "UpdateRandomCharacterVisibility")]
+        public static class DisableRitsuStuff
+        {
+            [HarmonyPrefix]
+            public static bool DoNothing()
+            {
+                return false;
             }
         }
     }

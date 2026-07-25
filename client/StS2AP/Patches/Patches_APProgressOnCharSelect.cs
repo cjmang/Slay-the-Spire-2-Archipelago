@@ -35,6 +35,10 @@ namespace StS2AP.Patches
             /// </summary>
             public static void UpdateCheckedLocations(CharacterModel character)
             {
+                if(!ArchipelagoClient.Settings.Characters.ContainsKey(character.Id.Entry))
+                {
+                    return;
+                }
                 // Update Card Locations
                 var cardLocations = LocationData.GetCardRewardLocations(character);
                 SetCheckedLocation(ArchipelagoCharTrackerUI.CardChecks, cardLocations, ArchipelagoProgress._maxCardRewards / (ArchipelagoClient.Settings.ShouldShuffleAllCards ? 1 : 2));
@@ -112,6 +116,11 @@ namespace StS2AP.Patches
             /// </summary>
             public static void UpdateReceivedItems(CharacterModel characterModel)
             {
+                if(!ArchipelagoClient.Settings.Characters.ContainsKey(characterModel.Id.Entry))
+                {
+                    // Not sure how this is getting called with something that doesn't belong, but just in case.
+                    return;
+                }
                 // Get Character ID
                 long? checkMe = characterModel.GetCharacterOffset();
                 LogUtility.Info($"Selected Character: {characterModel.APName()}, AP Char ID: {checkMe}");

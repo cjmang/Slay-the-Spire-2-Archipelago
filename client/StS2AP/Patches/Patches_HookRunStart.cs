@@ -32,7 +32,7 @@ namespace StS2AP.Patches
             [HarmonyPrefix]
             public static void Prefix(CharacterModel character, ref int ascensionLevel, ref string seed)
             {
-                var officialName = character.GetType().Name;
+                var officialName = character.Id.Entry;
                 GameUtility.CurrentConfig = ArchipelagoClient.Settings.Characters[officialName];
                 if(GameUtility.CurrentConfig.Ascension.Count == 0)
                 {

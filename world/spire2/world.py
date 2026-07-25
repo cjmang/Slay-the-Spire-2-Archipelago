@@ -518,6 +518,7 @@ class SlayTheSpire2World(World):
                 char_dict['seed'],
                 char_dict['locked'],
                 ascension=char_dict['ascension'],
+                ascension_down=char_dict['ascension_down'],
             )
             self.characters.append(config)
             if char_dict['mod_num'] > 0:

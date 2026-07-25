@@ -18,6 +18,10 @@ namespace StS2AP.Extensions
         /// <example>An Ironclad instance returns "Ironclad", because items for that character include "Ironclad Card Reward", "Ironclad Relic", etc.</example>
         public static string APName(this CharacterModel character)
         {
+            if(ArchipelagoClient.Settings.Characters.TryGetValue(character.Id.Entry, out var config))
+            {
+                return config.Name;
+            }
             return character.Id.Entry;
         }
 
@@ -32,8 +36,7 @@ namespace StS2AP.Extensions
 
         public static long? GetCharacterOffset(this CharacterModel character)
         {
-            var config = ArchipelagoClient.Settings.Characters[character.Id.Entry];
-            if (config != null)
+            if (ArchipelagoClient.Settings.Characters.TryGetValue(character.Id.Entry, out var config))
             {
                 return config.CharOffset;
             }
@@ -71,7 +74,7 @@ namespace StS2AP.Extensions
         /// </summary>
         public static bool HasCleared(this CharacterModel character)
         {
-            return GameUtility.HasCharacterGoaled(character.APName());
+            return GameUtility.HasCharacterGoaled(character.Id.Entry);
         }
     }
 }
