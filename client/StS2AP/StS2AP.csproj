@@ -20,7 +20,7 @@
 		<ModName Condition="'$(ModName)' == ''">ExampleMod</ModName>
 		<ModDisplayName Condition="'$(ModDisplayName)' == ''">Example Mod</ModDisplayName>
 		<ModAuthor Condition="'$(ModAuthor)' == ''">Unknown</ModAuthor>
-		<ModVersion Condition="'$(ModVersion)' == ''">0.4.0</ModVersion>
+		<ModVersion Condition="'$(ModVersion)' == ''">0.5.3</ModVersion>
 
 		<AssemblyName>$(ModName)</AssemblyName>
 		<Version>$(ModVersion)</Version>
@@ -33,6 +33,7 @@
 
 	<ItemGroup>
 	  <PackageReference Include="Archipelago.MultiClient.Net" Version="6.7.0" />
+	  <PackageReference Include="STS2.RitsuLib.Compat.0.107.1" Version="0.4.53" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -185,10 +186,17 @@ dotnet/embed_build_outputs=false
 		<Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ModsOutputDir)" />
 		<!-- Copy all dependency DLLs (NuGet packages) except game-provided assemblies -->
 		<ItemGroup>
-			<DependencyDlls Include="$(TargetDir)*.dll" Exclude="$(TargetDir)$(TargetFileName);$(TargetDir)GodotSharp.dll;$(TargetDir)0Harmony.dll;$(TargetDir)sts2.dll" />
+			<DependencyDlls Include="$(TargetDir)*.dll" Exclude="$(TargetDir)$(TargetFileName);$(TargetDir)GodotSharp.dll;$(TargetDir)0Harmony.dll;$(TargetDir)sts2.dll;$(TargetDir)STS2.RitsuLib*.dll" />
 		</ItemGroup>
 		<Copy SourceFiles="@(DependencyDlls)" DestinationFolder="$(ModsOutputDir)" />
 		<Copy SourceFiles="Archipelago.json" DestinationFiles="$(ModsOutputDir)\Archipelago.json" />
+		<!-- Copy .apworld file if it exists (dev builds may not have it yet) -->
+		<PropertyGroup>
+			<ApWorldSource>$(MSBuildProjectDirectory)\..\..\dist\spire2.apworld</ApWorldSource>
+			<ApWorldDest>$(ModsOutputDir)\spire2.apworld</ApWorldDest>
+		</PropertyGroup>
+		<Copy SourceFiles="$(ApWorldSource)" DestinationFiles="$(ApWorldDest)" Condition="Exists('$(ApWorldSource)')" />
+		<Warning Text="spire2.apworld not found in dist folder. Run scripts\build_world.ps1 to build it." Condition="!Exists('$(ApWorldSource)')" />
 		<Exec Command="&quot;$(GodotExePath)&quot; --headless --path &quot;$(GodotProject)&quot; --export-pack &quot;Windows Desktop&quot; &quot;$(ModsOutputDir)\$(ModName).pck&quot;" />
 	</Target>
 </Project>

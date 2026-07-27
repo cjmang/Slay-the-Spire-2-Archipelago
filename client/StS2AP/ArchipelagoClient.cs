@@ -1,15 +1,21 @@
 ﻿using Archipelago.MultiClient.Net;
+using Archipelago.MultiClient.Net.BounceFeatures.DeathLink;
 using Archipelago.MultiClient.Net.Enums;
 using Archipelago.MultiClient.Net.Helpers;
 using Archipelago.MultiClient.Net.MessageLog.Messages;
 using Archipelago.MultiClient.Net.Models;
 using Godot;
+using MegaCrit.Sts2.Core.Localization;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Characters;
+using Newtonsoft.Json.Linq;
 using StS2AP.Data;
 using StS2AP.Models;
 using StS2AP.UI;
 using StS2AP.Utils;
+using STS2RitsuLib;
+using STS2RitsuLib.Data;
+using static StS2AP.Data.CharTable;
 using static StS2AP.Data.ItemTable;
 
 namespace StS2AP
@@ -58,7 +64,7 @@ namespace StS2AP
         /// <summary>
         /// Minimum Archipelago Version that's supported by the mod.
         /// </summary>
-        public const string APVersion = "0.6.6";
+        public const string APVersion = "0.6.7";
 
         /// <summary>
         /// The current connection state of the client.
@@ -75,7 +81,21 @@ namespace StS2AP
         #region Session Information
 
         /// <summary>
-        /// The Player's settings, mostly from the YAML
+        /// The local settings for the client, as configured by the player.
+        /// 
+        /// This contains overrides for the server-provided settings, which are stored in <seealso cref="Settings"/>,
+        /// and allows the player to customize their experience without affecting the server's authoritative configuration,
+        /// changing non-YAML settings such as notification frequency, etc.
+        /// </summary>
+        public static ModDataStoreCache<ClientSettings> LocalSettings { get; set; } = RitsuLibFramework.GetDataStore(ModEntry.ModId).CreateCache<ClientSettings>("apsettings");
+
+        /// <summary>
+        /// The Archipelago Slot's settings, returned from the Server and initially configured from the player's YAML.
+        /// 
+        /// Unless overridden using local settings, this is the default source of truth for the session's settings.
+        /// 
+        /// It should not be written to after initialization, as it represents the server's authoritative configuration for this slot,
+        /// which we can't change.
         /// </summary>
         public static ArchipelagoSettings Settings { get; private set; }
 
@@ -86,7 +106,6 @@ namespace StS2AP
         /// Some of this data resets every run.
         /// </summary>
         public static ArchipelagoProgress Progress { get; set; } = new();
-
 
         /// <summary>
         /// Represents how caught up we are with Archipelago's sent items
@@ -119,7 +138,35 @@ namespace StS2AP
         /// </summary>
         public static Dictionary<long, ScoutedItemInfo> ScoutedLocations { get; set; } = new();
 
+        #region Death Link Information
+
+        /// <summary>
+        /// Handles Death Link functionality, which allows players to share deaths across the multiworld.
+        /// </summary>
+        public static DeathLinkService DeathLinkController { get; set; }
+
+        /// <summary>
+        /// A cache of the last Death Link message received, which will be loaded into a clone of the Death Link Curse after it
+        /// goes from "canonical" to "mutable" (i.e. instanced)
+        /// </summary>
+        public static string? LastDeathLinkMessage { get; set; }
+
+        /// <summary>
+        /// The UTC timestamp of the most recently received Death Link.
+        /// 
+        /// Used to suppress re-triggering a Death Link when the player dies
+        /// as a direct result of receiving one. 
+        /// 
+        /// Null if no Death Link has been received this session,
+        /// or if we're in Curse mode (which doesn't warrant suppression).
+        /// </summary>
+        public static DateTime? LastDeathLinkReceivedAt { get; set; }
+
+        #endregion
+
         #region Networking
+
+        private static ReaderWriterLock ConnectionLock { get; } = new ReaderWriterLock();
 
         /// <summary>
         /// Attempts to connect to an Archipelago room
@@ -157,24 +204,41 @@ namespace StS2AP
             Session.Socket.SocketClosed += OnSocketSessionEnd;
             Session.MessageLog.OnMessageReceived += OnMessageReceived;
 
+            // Setup the Death Link Service (even if the player isn't using Death Link)
+            DeathLinkController = Session.CreateDeathLinkService();
+            DeathLinkController.OnDeathLinkReceived += deathLinkInfo =>
+            {
+                Callable.From(() => DeathLinkUtility.OnDeathLinkReceived(deathLinkInfo)).CallDeferred();
+            };
+
             // Attempt to connect to the server
             try
             {
-                // it's safe to thread this function call but unity notoriously hates threading so do not use excessively
-                ThreadPool.QueueUserWorkItem(
-                    _ => HandleConnectResult(
-                        Session.TryConnectAndLogin(
-                            Game,
-                            PlayerName,
-                            ItemsHandlingFlags.AllItems,
-                            new Version(APVersion),
-                            password: ServerPassword,
-                            requestSlotData: SlotData.Count == 0
-                        )));
+                // it's safe to thread this function call but Godot hates threading so do not use excessively
+                Callable.From(() =>
+                {
+                    ConnectionLock.AcquireWriterLock(30000);
+                    try
+                    {
+                        HandleConnectResult(
+                                Session.TryConnectAndLogin(
+                                    Game,
+                                    PlayerName,
+                                    ItemsHandlingFlags.AllItems,
+                                    new Version(APVersion),
+                                    password: ServerPassword,
+                                    requestSlotData: SlotData.Count == 0
+                                ));
+                    }
+                    finally
+                    {
+                        ConnectionLock.ReleaseWriterLock();
+                    }
+                }).CallDeferred();
             }
             catch (Exception e)
             {
-                HandleConnectResult(new LoginFailure(e.ToString()));
+                Callable.From(() => HandleConnectResult(new LoginFailure(e.ToString()))).CallDeferred();
             }
         }
 
@@ -194,34 +258,80 @@ namespace StS2AP
                 SlotData = success.SlotData;
                 Seed = Session.RoomState.Seed;
 
+                // Log all slot data
+                LogUtility.Info("Dumping Slot Data:");
+                foreach (var kvp in SlotData)
+                {
+                    LogUtility.Info($"KEY: {kvp.Key}");
+                    LogUtility.Info($"VAL: {kvp.Value.ToString()}");
+                }
+
+                Settings = GetPlayerSettings();
+
                 // Before we tell the user everything is okay, let's make sure that the mod version is correct
                 var apWorldVersion = "v" + (SlotData["mod_compat_version"] as string);
                 LogUtility.Info($"APWorld Version: {apWorldVersion}");
                 LogUtility.Info($"Client Version: {Version}");
+
+                // If there's a version mismatch, we have another step
                 if (apWorldVersion == null || apWorldVersion != Version)
                 {
-                    // Log the issue
-                    LogUtility.Error($"Version mismatch! Server expects version {apWorldVersion}, but client is version {Version}. Please update your mod.");
+                    // Log the mismatch
+                    LogUtility.Warn($"Version mismatch! Server expects version {apWorldVersion}, but client is version {Version}. Please update your mod.");
 
-                    // Disconnect from the server since we can't guarantee compatibility
-                    Disconnect();
+                    // Warn the user that there's a version mismatch, and let them decide how to proceed.
+                    var popup = new ConfirmPopup();
+                    popup.Header = new LocString("main_menu_ui", "VERSION_MISMATCH.header");
+                    popup.Body = new LocString("main_menu_ui", "VERSION_MISMATCH.body");
+                    popup.Body.Add("server", apWorldVersion!);
+                    popup.Body.Add("client", Version);
+                    popup.ButtonPressed = (yesPressed) =>
+                    {
+                        // On no, we should cancel out.
+                        if (!yesPressed)
+                        {
+                            LogUtility.Warn("User was warned about version mismatch, proceeded anyways!");
 
-                    // Re-Enable the UI
-                    ArchipelagoConnectionUI.SetConnectButtonEnabled(true);
-                    ArchipelagoConnectionUI.SetCloseButtonEnabled(true);
+                            // Show the connection UI again
+                            ArchipelagoConnectionUI.Show();
 
-                    // Tell the user they need to update their mod
-                    ArchipelagoConnectionUI.SetStatus($"Version mismatch! Server expects version {apWorldVersion}, but client is version {Version}. Please update your mod.");
+                            // Disconnect from the server since we can't guarantee compatibility
+                            Disconnect();
 
-                    return;
+                            // Re-Enable the UI
+                            ArchipelagoConnectionUI.SetConnectButtonEnabled(true);
+                            ArchipelagoConnectionUI.SetCloseButtonEnabled(true);
+
+                            // Tell the user they need to update their mod
+                            ArchipelagoConnectionUI.SetStatus($"Version mismatch! Server expects version {apWorldVersion}, but client is version {Version}. Please update your mod.");
+
+                            return;
+                        }
+                        // On yes, we proceed
+                        else
+                        {
+                            // Complete any locations that we have
+                            outText = $"Successfully connected to {ServerAddress} as {PlayerName}!";
+
+                            // Let the game know that we've connected
+                            OnConnected();
+                        }
+                    };
+
+                    // Hide the connection UI and show the popup
+                    ArchipelagoConnectionUI.Hide();
+                    popup.Show();
                 }
 
-                // Complete any locations that we have
-                //Session.Locations.CompleteLocationChecksAsync(null, CheckedLocations.ToArray());
-                outText = $"Successfully connected to {ServerAddress} as {PlayerName}!";
+                // Otherwise proceed
+                else
+                {
+                    // Complete any locations that we have
+                    outText = $"Successfully connected to {ServerAddress} as {PlayerName}!";
 
-                // Let the game know that we've connected
-                OnConnected();
+                    // Let the game know that we've connected
+                    OnConnected();
+                }
             }
             else
             {
@@ -232,6 +342,45 @@ namespace StS2AP
 
                 // End the connection
                 Disconnect();
+            }
+        }
+
+        private static void SetupUnlockedCharacters()
+        {
+            var characters = Settings.Characters;
+            var ids = new HashSet<string>(ArchipelagoClient.Progress.UnlockedCharacters.Select(c => c.Id.Entry));
+            bool someoneUnlocked = false;
+            foreach(var c in characters)
+            {
+                if(ids.Contains(c.Key))
+                {
+                    someoneUnlocked = true;
+                    break;
+                }
+            }
+            if (!someoneUnlocked)
+            {
+                // Probably someone didn't enter a modded character id correctly
+                // This is a failsafe to hopefully unlock *someone*
+                //var newResult = new List<CharacterModel>();
+                foreach (var c in ModelDb.AllCharacters)
+                {
+                    if (characters.ContainsKey(c.Id.Entry))
+                    {
+                        ArchipelagoClient.Progress.UnlockedCharacters.Add(c);
+                        break;
+                    }
+                }
+                if(ArchipelagoClient.Progress.UnlockedCharacters.Count == 0)
+                {
+                    LogUtility.Error($"No valid AP characters found to unlock!  Valid characters: {string.Join(",", characters.Keys)}; Existing: {
+                        string.Join(",", ModelDb.AllCharacters.Select(c => c.Id.Entry))}");
+                }
+                else
+                {
+                    LogUtility.Info($"Force unlocking character {ArchipelagoClient.Progress.UnlockedCharacters.First().Id.Entry}");
+                }
+                //__result = newResult;
             }
         }
 
@@ -248,8 +397,22 @@ namespace StS2AP
 
             try
             {
-                // Get all settings for this player
-                Settings = GetPlayerSettings();
+                // Enable/Disable the Death Link Service based on user settings
+                LogUtility.Info($"SLOT - Is Death Link Enabled: {Settings.IsDeathLinkEnabled.ToString()}");
+                LogUtility.Info($"SLOT - Death Link Damage Percentage: {Settings.DeathLinkDamagePercent.ToString()}%");
+                LogUtility.Info($"SLOT - Death Link Curse Enabled: {Settings.EnableDeathFragments.ToString()}");
+                LogUtility.Info($"LOCAL - Death Link Settings Override: {LocalSettings.Value.OverrideDeathLinkOptions.ToString()}");
+                LogUtility.Info($"LOCAL - Opt-In to Death Link: {LocalSettings.Value.EnableDeathLink.ToString()}");
+                LogUtility.Info($"LOCAL - Death Link Override Damage Percentage: {LocalSettings.Value.DeathLinkPercentDamage.ToString()}%");
+                LogUtility.Info($"LOCAL - Death Link Override Curse Enabled: {LocalSettings.Value.EnableDeathFragments.ToString()}");
+                if (DeathLinkUtility.IsDeathLinkEnabled)
+                {
+                    DeathLinkController.EnableDeathLink();
+                }
+                else
+                {
+                    DeathLinkController.DisableDeathLink();
+                }
             }
             catch (Exception ex)
             {
@@ -272,15 +435,12 @@ namespace StS2AP
                     ModelDb.Character<Necrobinder>(),
                     ModelDb.Character<Defect>()
                 };
+                // TODO: need to include modded characters
                 Progress.UnlockedCharacters.AddRange(characters);
             }
 
-            // Log all slot data
-            foreach (var kvp in SlotData)
-            {
-                LogUtility.Debug($"KEY: {kvp.Key}");
-                LogUtility.Debug($"VAL: {kvp.Value.ToString()}");
-            }
+            SetupUnlockedCharacters();
+
 
             // Pre-scout all locations so we have item info available for notifications
             ThreadPool.QueueUserWorkItem(_ => PreScoutAllLocations());
@@ -289,6 +449,7 @@ namespace StS2AP
             _ = GameUtility.RestoreGoaledCharsFromStorage();
 
             _ = GameUtility.SetupOnChangedSaves();
+
             // Let the game know that we've connected
             Callable.From(() => ConnectionStateChanged?.Invoke(ConnectionState.Connected)).CallDeferred();
         }
@@ -423,20 +584,29 @@ namespace StS2AP
         /// </summary>
         private static void OnItemReceived(ReceivedItemsHelper helper)
         {
-            // Deal with this Item
-            lock (_itemLock)
+            ConnectionLock.AcquireReaderLock(120000);
+
+            try
             {
-                // Grab the item data
-                var receivedItem = helper.DequeueItem();
+                // Deal with this Item
+                lock (_itemLock)
+                {
+                    // Grab the item data
+                    var receivedItem = helper.DequeueItem();
 
-                // Ignore if this item is an old message
-                if (helper.Index <= Index) return;
+                    // Ignore if this item is an old message
+                    if (helper.Index <= Index) return;
 
-                // Process it
-                ProcessItem(receivedItem, helper.Index);
-                
-                // Keep track of how many messages we've had so far
-                Index++;
+                    // Process it
+                    ProcessItem(receivedItem, helper.Index);
+
+                    // Keep track of how many messages we've had so far
+                    Index++;
+                }
+            }
+            finally
+            {
+                ConnectionLock.ReleaseReaderLock();
             }
 
         }
@@ -487,7 +657,25 @@ namespace StS2AP
                 // Character Unlocks
                 case APItem.Unlock:
                     {
+                        LogUtility.Info("Before GameUtility Unlock");
                         GameUtility.UnlockCharacter(item);
+                        LogUtility.Info("After GameUtility Unlock");
+
+                        // Fire the CharacterUnlocked event on the Godot main thread.
+                        // This allows the character select screen (if open) to immediately
+                        // refresh the appropriate button without waiting for OnSubmenuOpened.
+                        var offset = item.GetCharacterOffset();
+                        LogUtility.Info("After offset acquisition");
+                        var config = ArchipelagoClient.Settings.Characters.Values.FirstOrDefault(config => config.CharOffset == offset);
+                        LogUtility.Info("After Settings check");
+                        if(config == null)
+                        {
+                            LogUtility.Warn($"Got Unlock for character not configured {item.ItemId}");
+                            break;
+                        }
+                        LogUtility.Info("after config null check");
+                        Callable.From(() => CharacterUnlocked?.Invoke(config)).CallDeferred();
+
                         break;
                     }
                 // Progressive Smiths/Rests
@@ -496,7 +684,7 @@ namespace StS2AP
                     {
                         // Get the IDs for storing the item
                         var itemId = item.GetRawItemID();
-                        var playerId = item.GetStSCharID();
+                        var offset = item.GetCharacterOffset();
 
                         // Add the Smith/Rest to the amount we've received for this character
                         var source = itemId == APItem.ProgressiveSmith ? Progress.ProgressiveSmiths : Progress.ProgressiveRests;
@@ -504,10 +692,10 @@ namespace StS2AP
                         // Increment the reward
                         try
                         {
-                            var haveKey = source.TryGetValue(playerId, out int amount);
+                            var haveKey = source.TryGetValue(offset, out int amount);
                             if (!haveKey) amount = 0;
-                            source[playerId] = amount + 1;
-                            LogUtility.Success($"New Value for {(itemId == APItem.ProgressiveSmith ? "ProgressiveSmiths" : "ProgressiveRests")} is {source[playerId]}");
+                            source[offset] = amount + 1;
+                            LogUtility.Success($"New Value for {(itemId == APItem.ProgressiveSmith ? "ProgressiveSmiths" : "ProgressiveRests")} is {source[offset]}");
                         }
                         catch (KeyNotFoundException e)
                         {
@@ -528,15 +716,15 @@ namespace StS2AP
                 case APItem.BossGold:
                     {
                         // Get the IDs for storing the item
-                        var playerId = item.GetStSCharID();
+                        var charOffset = item.GetCharacterOffset();
                         var itemId = item.GetRawItemID();
 
                         // Add the Gold to the amount we've received
                         try
                         {
-                            var haveKey = Progress.GoldReceived.TryGetValue(playerId, out int gold);
+                            var haveKey = Progress.GoldReceived.TryGetValue(charOffset, out int gold);
                             if (!haveKey) gold = 0;
-                            Progress.GoldReceived[playerId] = gold + ItemTable.GoldItemAmounts[itemId];
+                            Progress.GoldReceived[charOffset] = gold + ItemTable.GoldItemAmounts[itemId];
                         }
                         catch (KeyNotFoundException e)
                         {
@@ -549,6 +737,20 @@ namespace StS2AP
 
                         break;
                     }
+                case APItem.SwarmingElites:
+                case APItem.WearyTraveler:
+                case APItem.Poverty:
+                case APItem.TightBelt:
+                case APItem.AscenderBane:
+                case APItem.Inflation:
+                case APItem.Scarcity:
+                case APItem.ToughEnemies:
+                case APItem.DeadlyEnemies:
+                case APItem.DoubleBoss:
+                    Progress.Ascensions.ProcessAscensionLevel(GameUtility.CurrentConfig, item, false);
+                    Progress.UsedItems.Add(index);
+                    Progress.AllReceivedItems.Add(new IndexedItemInfo(item, index));
+                    break;
                 // Everything else ends up in the "reward pool"
                 default:
                     {
@@ -570,7 +772,8 @@ namespace StS2AP
             {
                 ItemInfo info = ArchipelagoClient.Session.Items.AllItemsReceived[i];
 
-                ProcessItem(info, i, false);
+                // i+1 because the index from multiclient .net is essentially 1 based, not 0
+                ProcessItem(info, i + 1, false);
             }
         }
 
@@ -596,12 +799,43 @@ namespace StS2AP
             ArchipelagoSettings settings = new();
 
             // Apply all found settings
-            if (slotData.ContainsKey("ascension")) settings.AscensionLevel = Convert.ToInt32(slotData["ascension"]);
             if (slotData.ContainsKey("seeded")) settings.IsSeeded = Convert.ToBoolean(slotData["seeded"]);
+            if (slotData.ContainsKey("death_link")) settings.IsDeathLinkEnabled = Convert.ToBoolean(slotData["death_link"]);
             if (slotData.ContainsKey("shuffle_all_cards")) settings.ShouldShuffleAllCards = Convert.ToBoolean(slotData["shuffle_all_cards"]);
             if (slotData.ContainsKey("lock_characters")) settings.NoCharactersLocked = Convert.ToInt32(slotData["lock_characters"]) == 0;
+            if (slotData.ContainsKey("enable_death_fragments")) settings.EnableDeathFragments = Convert.ToInt32(slotData["enable_death_fragments"]) == 1;
+            if (slotData.ContainsKey("death_link_damage_percent")) settings.DeathLinkDamagePercent = Convert.ToInt32(slotData["death_link_damage_percent"]);
             if (slotData.ContainsKey("num_chars_goal")) settings.NumCharsGoal = Convert.ToInt32(slotData["num_chars_goal"]);
-            if (slotData.ContainsKey("characters") && slotData["characters"] is System.Collections.IList charsList) settings.TotalCharacters = charsList.Count;
+            if (slotData.ContainsKey("characters") && slotData["characters"] is System.Collections.IList charsList)
+            {
+                // Grab the total number of characters
+                settings.TotalCharacters = charsList.Count;
+
+                /// Go through each character and add it to the list of Characters in our settings.
+                /// Slot data from Archipelago.MultiClient.Net is deserialized via Newtonsoft.Json,
+                /// so each entry arrives as a JObject, NOT a Dictionary<string, object>.
+                foreach (var charData in charsList)
+                {
+                    if (charData is JObject)
+                    {
+                        var config = CharacterConfig.fromJObject(charData as JObject);
+                        if(config != null)
+                        {
+                            settings.Characters.Add(config.OfficialName, config);
+                        }
+                    }
+                }
+                
+                foreach(var config in settings.Characters.Values)
+                {
+                    var model = ModelDb.AllCharacters.FirstOrDefault(model => string.Equals(model.Id.Entry, config.OfficialName, StringComparison.OrdinalIgnoreCase));
+                    if(model == null)
+                    {
+                        settings.UnrecognizedCharacters[config.OfficialName] = config;
+                    }
+                }
+                
+            }
 
             if (slotData.ContainsKey("campfire_sanity"))
                 settings.CampfireSanity = Convert.ToInt32(slotData["campfire_sanity"]) != 0;
@@ -619,6 +853,14 @@ namespace StS2AP
             return settings;
         }
 
+
         #endregion
+
+        /// <summary>
+        /// Fires when a character unlock item is received and processed.
+        /// Passes the <see cref="CharacterConfig"/> of the character that was just unlocked.
+        /// Always dispatched on the Godot main thread via CallDeferred so UI can safely respond.
+        /// </summary>
+        public static event Action<CharacterConfig> CharacterUnlocked;
     }
 }

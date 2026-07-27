@@ -1,4 +1,5 @@
-﻿using Archipelago.MultiClient.Net.MessageLog.Messages;
+﻿using Archipelago.MultiClient.Net.BounceFeatures.DeathLink;
+using Archipelago.MultiClient.Net.MessageLog.Messages;
 using Archipelago.MultiClient.Net.Models;
 using Godot;
 using MegaCrit.Sts2.Core.DevConsole;
@@ -160,18 +161,21 @@ namespace StS2AP.Utils
                 case APItem.Potion:
                         return @"[img]res://images/packed/sprite_fonts/potion_icon.png[/img]";
                 case APItem.Unlock:
-                        switch (item.GetStSCharID())
+                        switch (item.GetCharacterOffset())
                         {
-                            case APItemCharID.Ironclad:
+                            case (int) APItemCharID.Ironclad:
                                     return @"[img]res://images/packed/sprite_fonts/ironclad_energy_icon.png[/img]";
-                            case APItemCharID.Silent:
+                            case (int) APItemCharID.Silent:
                                     return @"[img]res://images/packed/sprite_fonts/silent_energy_icon.png[/img]";
-                            case APItemCharID.Defect:
+                            case (int) APItemCharID.Defect:
                                     return @"[img]res://images/packed/sprite_fonts/defect_energy_icon.png[/img]";
-                            case APItemCharID.Necrobinder:
+                            case (int) APItemCharID.Necrobinder:
                                     return @"[img]res://images/packed/sprite_fonts/necrobinder_energy_icon.png[/img]";
-                            case APItemCharID.Regent:
+                            case (int) APItemCharID.Regent:
                                     return @"[img]res://images/packed/sprite_fonts/regent_energy_icon.png[/img]";
+                            default:
+                                    // TODO: What to do for modded characters?
+                                    return @"[img]res://images/packed/sprite_fonts/ironclad_energy_icon.png[/img]";
                         }
                     return null;
             }
@@ -315,6 +319,23 @@ namespace StS2AP.Utils
             EnqueueNotification(
                 msg,
                 NotificationType.Info);
+        }
+
+        /// <summary>
+        /// Displays a notification about a death link trigger in the multiworld
+        /// </summary>
+        /// <param name="death">Information about the Death Link event</param>
+        public static void ShowDeathLink(DeathLink death)
+        {
+            // If somehow we got here and Death Link is disabled, then back out
+            if (!DeathLinkUtility.IsDeathLinkEnabled) return;
+
+            // If the cause is valid, display that, otherwise use a generic message
+            string cause = string.IsNullOrEmpty(death.Cause) ? $"{death.Source} has died!" : death.Cause;
+
+            // Wrap the entire message in red color and sine animation BBcode tags
+            string message = $"[sine][color=red]{cause}[/color][/sine]";
+            EnqueueNotification(message, NotificationType.Info);
         }
 
         #endregion

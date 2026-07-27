@@ -29,7 +29,16 @@ namespace StS2AP.Data
             _30Gold = 16,
             BossGold = 17,
             Potion = 18,
-            AscensionDown = 19
+            SwarmingElites = 19,
+            WearyTraveler = 20,
+            Poverty = 21,
+            TightBelt = 22,
+            AscenderBane = 23,
+            Inflation = 24,
+            Scarcity = 25,
+            ToughEnemies = 26,
+            DeadlyEnemies = 27,
+            DoubleBoss = 28
         }
 
         public static Dictionary<int, string> Items = new Dictionary<int, string>
@@ -53,7 +62,16 @@ namespace StS2AP.Data
             { 16, "30 Gold" },
             { 17, "Boss Gold" },
             { 18, "Potion" },
-            { 19, "Ascension Down" }
+            { 19, "Swarming Elites" },
+            { 20, "Weary Traveler" },
+            { 21, "Poverty" },
+            { 22, "Tight Belt" },
+            { 23, "Ascender's Bane" },
+            { 24, "Inflation" },
+            { 25, "Scarcity" },
+            { 26, "Tough Enemies" },
+            { 27, "Deadly Enemies" },
+            { 28, "Double Boss" }
         };
 
         /// <summary>
@@ -67,5 +85,50 @@ namespace StS2AP.Data
             { APItem._30Gold, 30 },
             { APItem.BossGold, 100 }
         };
+
+        public static bool CanBePickedUp(this APItem item)
+        {
+            switch(item)
+            {
+              case APItem.CAWCAW:
+                   return false;
+              case APItem.CardReward:
+              case APItem.RareCardReward:
+              case APItem.Relic:
+                    return true;
+              case APItem.BossRelic:
+                    return false;
+              case APItem.ProgressiveRest:
+              case APItem.ProgressiveSmith:
+              case APItem.ShopCardSlot:
+              case APItem.NeutralShopCardSlot:
+              case APItem.ShopRelicSlot:
+              case APItem.ShopPotionSlot:
+              case APItem.ProgressiveShopRemove:
+                    return false;
+              case APItem.Unlock:
+                    return false;
+              case APItem.OneGold:
+              case APItem.FiveGold:
+              case APItem._15Gold:
+              case APItem._30Gold:
+              case APItem.BossGold:
+                    return false;
+              case APItem.Potion:
+                    return true;
+              case APItem.SwarmingElites:
+              case APItem.WearyTraveler:
+              case APItem.Poverty:
+              case APItem.TightBelt:
+              case APItem.AscenderBane:
+              case APItem.Inflation:
+              case APItem.Scarcity:
+              case APItem.ToughEnemies:
+              case APItem.DeadlyEnemies:
+              case APItem.DoubleBoss:
+                    return false;
+            }
+            return false;
+        }
     }
 }

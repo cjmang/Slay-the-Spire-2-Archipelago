@@ -26,7 +26,7 @@ namespace StS2AP.Patches
     
     public static class Patches_RunSaveManager
     {
-        [HarmonyPatch(typeof(RunSaveManager), "SaveRun")]
+        [HarmonyPatch(typeof(RunSaveManager), nameof(RunSaveManager.SaveRun), new[] { typeof(AbstractRoom) })]
         public static class SaveRun
         {
             [HarmonyPrefix]
@@ -64,7 +64,7 @@ namespace StS2AP.Patches
                     return;
                 }
                 var saveDict = new Dictionary<string, string>();
-                saveDict[GameUtility.CurrentPlayer.APName()] = zipped;
+                saveDict[GameUtility.CurrentPlayer.getInternalName()] = zipped;
                 ArchipelagoClient.Session.DataStorage[Scope.Slot, $"StS2AP_Saves"]
                     += Operation.Update(saveDict);
             }
@@ -154,6 +154,7 @@ namespace StS2AP.Patches
                     if (GameUtility.APSaves.TryGetValue(charName, out saveStr))
                     {
                         var unzipped = Patches_RunSaveManager.SaveRun.Unzip(saveStr);
+                        //LogUtility.Info($"JSON Save data{unzipped}");
                         SerializableAP? result = JsonSerializer.Deserialize<SerializableAP>(unzipped, SerializationUtility.CombinedOptions);
                         if (result == null)
                         {
@@ -163,13 +164,15 @@ namespace StS2AP.Patches
                         }
                         SerializableRun serializableRun = result.SaveData;
                         RunState runState = RunState.FromSerializable(serializableRun);
-                        RunManager.Instance.SetUpSavedSinglePlayer(runState, serializableRun);
+                        await RunManager.Instance.SetUpSavedSingleplayer(runState, serializableRun);
                         Log.Info($"Continuing run with character: {serializableRun.Players[0].CharacterId}");
                         SfxCmd.Play(runState.Players[0].Character.CharacterTransitionSfx);
 
                         GameUtility.CurrentPlayer = runState.Players[0];
+                        GameUtility.CurrentConfig = ArchipelagoClient.Settings.Characters[GameUtility.CurrentPlayer.getInternalName()];
                         ArchipelagoClient.Progress = ArchipelagoProgress.FromSerializable(result, GameUtility.CurrentPlayer);
                         ArchipelagoClient.ReprocessItems();
+                        ArchipelagoClient.Progress.InitializeFromServer(GameUtility.CurrentPlayer);
                         await NGame.Instance.Transition.FadeOut(0.8f, runState.Players[0].Character.CharacterSelectTransitionPath);
                         NGame.Instance.ReactionContainer.InitializeNetworking(new NetSingleplayerGameService());
                         await NGame.Instance.LoadRun(runState, serializableRun.PreFinishedRoom);
@@ -243,7 +246,7 @@ namespace StS2AP.Patches
 
                     SerializableRun serializableRun = result.SaveData;
                     RunState runState = RunState.FromSerializable(serializableRun);
-                    RunManager.Instance.SetUpSavedSinglePlayer(runState, serializableRun);
+                    await RunManager.Instance.SetUpSavedSingleplayer(runState, serializableRun);
                     Log.Info($"Continuing run from recovery save with character: {serializableRun.Players[0].CharacterId}");
                     SfxCmd.Play(runState.Players[0].Character.CharacterTransitionSfx);
 

@@ -7,8 +7,6 @@ using MegaCrit.Sts2.Core.Nodes.HoverTips;
 using MegaCrit.Sts2.Core.Nodes.Screens;
 using MegaCrit.Sts2.Core.Nodes.Screens.Overlays;
 using MegaCrit.Sts2.Core.Nodes.TopBar;
-using StS2AP.Utils;
-using System;
 
 namespace StS2AP.UI
 {
@@ -134,7 +132,7 @@ namespace StS2AP.UI
         /// <param name="count">The number of unclaimed rewards. Values above <see cref="MaxDisplayCount"/> are clamped.</param>
         public static void SetCount(int count)
         {
-            if (_countLabel == null) return;
+            if (_countLabel == null || !GodotObject.IsInstanceValid(_countLabel)) return;
 
             if (count <= 0)
             {
@@ -268,7 +266,15 @@ namespace StS2AP.UI
         private static void OnButtonPressed()
         {
             LogUtility.Info("Opening Archipelago Rewards UI...");
-            ArchipelagoRewardUI.ShowRewards();
+
+            if(!ArchipelagoRewardUI.IsOpen)
+            {
+                ArchipelagoRewardUI.ShowRewards();
+            }
+            else
+            {
+                ArchipelagoRewardUI.Hide();
+            }
         }
 
         /// <summary>

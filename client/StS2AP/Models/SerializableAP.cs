@@ -30,15 +30,16 @@ namespace StS2AP.Models
         public Dictionary<int, SerializableRelic> RelicAssignments { get; set; } = new Dictionary<int, SerializableRelic>();
         [JsonPropertyName("card_assignments")]
         public Dictionary<int, SerializableReward> CardAssignments { get; set; } = new Dictionary<int, SerializableReward>();
+        [JsonPropertyName("card_models")]
+        public Dictionary<int, List<SerializableCard>> CardAssignmentModels {get; set;} = new Dictionary<int, List<SerializableCard>>();
         [JsonPropertyName("potion_assignments")]
         public Dictionary<int, SerializablePotion> PotionAssignments { get; set; } = new Dictionary<int, SerializablePotion>();
         [JsonPropertyName("used_items")]
         public List<int> UsedItems { get; set; } = new List<int>();
         [JsonPropertyName("gold_redeemed")]
         public int GoldRedeemed { get; set; }
-
+        public List<int> Ascensions { get; set; } = new List<int>();
     }
-
 
     [JsonSerializable(typeof(SerializableAP))]
     public partial class APSerializationContext : JsonSerializerContext

@@ -1,3 +1,4 @@
+import re
 import string
 import typing
 from collections import defaultdict
@@ -10,7 +11,7 @@ from .regions import create_regions
 from .rules import set_rules, SpireLogic
 from .web_world import SlayTheSpire2Web
 from .characters import CharacterConfig, character_list, character_offset_map
-from .constants import NUM_CUSTOM
+from .constants import NUM_CUSTOM, ASCENSION_LIST, CHAR_OFFSET, ASCENSIONS
 from .items import item_table, chars_to_items, ItemType, base_event_item_pairs, ItemData
 from .locations import location_table, MAX_CARD_REWARDS, loc_ids_to_data, LocationData, LocationType
 from .options import Spire2Options
@@ -33,7 +34,7 @@ class SlayTheSpire2World(World):
     web = SlayTheSpire2Web()
     options_dataclass = Spire2Options
     options: Spire2Options
-    mod_compat_version = "0.4.0"
+    mod_compat_version = "0.5.3"
     origin_region_name = "Neow's Room"
 
     # Build the final Item Table
@@ -103,16 +104,23 @@ class SlayTheSpire2World(World):
         if locked_opt == 1:
             unlocked_char = self.random.choice([x for x in characters])
         elif locked_opt == 2:
-            unlocked_char = self.options.unlocked_character.value
-            if type(unlocked_char) == int:
-                unlocked_char = character_list[unlocked_char]
+            unlocked_char_value = self.options.unlocked_character.value
+            # Convert to string if it's an int index
+            if isinstance(unlocked_char_value, int):
+                unlocked_char_value = character_list[unlocked_char_value]
 
-            for char in characters:
-                if char.lower() == unlocked_char.lower():
-                    return char
+            # If unlocked_character is empty string (meaning "any"), randomly select from available characters
+            if unlocked_char_value == "":
+                unlocked_char = self.random.choice([x for x in characters])
             else:
-                raise OptionError(
-                    f"Configured {unlocked_char} as the first unlocked character, but was not one of: {characters}")
+                # Validate that the selected character is in the configured characters list
+                for char in characters:
+                    if char.lower() == unlocked_char_value.lower():
+                        return char
+                else:
+                    # We really shouldn't be able to get here anymore...but if we do, let us know, because it means this logic needs more work...
+                    raise OptionError(
+                        f"Configured {unlocked_char_value} as the first unlocked character, but was not one of: {characters}")
         return unlocked_char
 
     def _handle_basic_chars(self) -> None:
@@ -127,15 +135,20 @@ class SlayTheSpire2World(World):
                 selected_chars = self.random.sample(selected_chars, k=num_rand_chars)
 
         # self.logger.info("Generating with characters %s", selected_chars)
-        # ascension_down = self.options.ascension_down.value
-        # if self.options.include_floor_checks.value == 0:
-        #     ascension_down = 0
+        ascension_down: typing.Set[str] = self.options.ascension_down.value
+        ascension: typing.Set[str] = self.options.ascension.value
+        ascension = self._to_ascensions(ascension)
+        ascension_down = self._to_ascension_downs(ascension_down, ascension)
+        if self.options.include_floor_checks.value == 0:
+            ascension_down = set()
+        ascension_down = ascension.intersection(ascension_down)
+
         for char_val in selected_chars:
             option_name = char_val
             char_offset = character_offset_map[option_name.lower()]
             name = character_list[char_offset - 1]
             if self.options.seeded:
-                seed = "".join(self.random.choice(string.ascii_letters) for i in range(16))
+                seed = "".join(self.random.choice(string.ascii_letters) for i in range(12))
             else:
                 seed = ""
             locked = False if unlocked_char is None or unlocked_char.lower() == option_name.lower() else True
@@ -145,15 +158,81 @@ class SlayTheSpire2World(World):
                                      0,
                                      seed,
                                      locked,
-                                     ascension=self.options.ascension.value)
+                                     ascension=ascension,
+                                     ascension_down=ascension_down)
             self.characters.append(config)
+
+        for index, modded_char in enumerate(sorted(self.options.modded_characters.value)):
+            if self.options.seeded:
+                seed = "".join(self.random.choice(string.ascii_letters) for i in range(12))
+            else:
+                seed = ""
+            locked = False if unlocked_char is None or unlocked_char.lower() == modded_char else True
+            offset = index + len(character_list)
+            config = CharacterConfig(modded_char,
+                                     modded_char,
+                                     offset,
+                                     index,
+                                     seed,
+                                     locked,
+                                     ascension=ascension,
+                                     ascension_down=ascension_down)
+            self.characters.append(config)
+            self.modded_chars.append(config)
+
+
+    def _to_ascensions(self, ascensions: typing.Set[str]) -> typing.Set[str]:
+        ret = set()
+        if len(ascensions) == 1:
+            try:
+                number = int(list(ascensions)[0])
+                for i in range(0, number):
+                    ret.add(ASCENSION_LIST[i].lower())
+                return ret
+            except:
+                return {asc.lower() for asc in ascensions}
+
+        for asc in ascensions:
+            try:
+                number = int(asc)
+                ret.add(ASCENSION_LIST[number].lower())
+            except:
+                ret.add(asc.lower())
+        return ret
+
+    def _to_ascension_downs(self, ascension_downs: typing.Set[str], ascensions: typing.Set[str]) -> typing.Set[str]:
+        ret = set()
+        if len(ascension_downs) == 1:
+            try:
+                number = int(list(ascension_downs)[0])
+                asc_list = ASCENSION_LIST[::-1]
+                count = 0
+                for i in range(0, len(asc_list)):
+                    asc = asc_list[i].lower()
+                    if asc in ascensions:
+                        ret.add(asc_list[i].lower())
+                        count += 1
+                    if count >= len(ascensions) or count >= number:
+                        break
+                return ret
+            except:
+                return {asc.lower() for asc in ascensions}
+
+        for asc in ascensions:
+            try:
+                number = int(asc)
+                ret.add(ASCENSION_LIST[number].lower())
+            except:
+                ret.add(asc.lower())
+        return ret
+
 
     def _handle_advanced_chars(self) -> None:
         advanced_chars = self.options.advanced_characters.keys()
         char_options = sorted(advanced_chars)
         num_rand_chars = self.options.pick_num_characters.value
         unlocked_char = self._get_unlocked_char(char_options)
-        # include_ascension_down = self.options.include_floor_checks.value != 0
+        include_ascension_down = self.options.include_floor_checks.value != 0
         if num_rand_chars != 0 and num_rand_chars < len(char_options):
             selected_chars = list(char_options)
             if self.options.lock_characters.value != 0:
@@ -163,13 +242,18 @@ class SlayTheSpire2World(World):
             else:
                 selected_chars = self.random.sample(selected_chars, k=num_rand_chars)
             modded_num = 0
+            modded_chars = []
             for char in selected_chars:
                 if character_offset_map.get(char.lower(), None) is None:
                     modded_num += 1
+                    modded_chars.append(char)
             if modded_num > NUM_CUSTOM:
-                supported_chars = sorted({x for x in char_options if x.lower() in character_offset_map})
+                supported_chars = sorted(
+                    {x for x in char_options if x.lower() in character_offset_map and x not in selected_chars})
                 replace_num = modded_num - NUM_CUSTOM
-                remove_me = self.random.sample(selected_chars, k=replace_num)
+                if unlocked_char in modded_chars:
+                    modded_chars.remove(unlocked_char)
+                remove_me = self.random.sample(modded_chars, k=replace_num)
                 for remove in remove_me:
                     selected_chars.remove(remove)
                 selected_chars += self.random.sample(supported_chars, k=min(replace_num, len(supported_chars)))
@@ -184,24 +268,31 @@ class SlayTheSpire2World(World):
             if char_offset is None:
                 self.modded_num += 1
                 mod_num = self.modded_num
-                char_offset = mod_num + len(character_list) - 1
+                char_offset = mod_num + len(character_list)
                 name = f"Custom Character {mod_num}"
             else:
-                name = character_list[char_offset]
+                name = character_list[char_offset - 1]
             if self.options.seeded:
                 seed = "".join(self.random.choice(string.ascii_letters) for i in range(16))
             else:
                 seed = ""
             locked = False if unlocked_char is None or unlocked_char.lower() == option_name.lower() else True
+
+            ascension = self._to_ascensions(options['ascension'])
+
+            ascension_down = self._to_ascension_downs(options['ascension_down'], ascension)
+
+            if not include_ascension_down:
+                ascension_down = set()
+            ascension_down = ascension.intersection(ascension_down)
             config = CharacterConfig(name,
                                      option_name,
                                      char_offset,
                                      mod_num,
                                      seed,
                                      locked,
-                                     **options)
-            # if not include_ascension_down:
-            #     config.ascension_down = 0
+                                     ascension=ascension,
+                                     ascension_down=ascension_down)
             self.characters.append(config)
             if config.mod_num > 0:
                 self.modded_chars.append(config)
@@ -270,9 +361,11 @@ class SlayTheSpire2World(World):
                 elif ItemType.POTION == data.type:
                     if self.options.potion_sanity.value != 0:
                         amount = 9
-                # elif ItemType.ASCENSION_DOWN == data.type:
-                #     if self.options.include_floor_checks.value != 0:
-                #         amount = ascension_downs
+                elif ItemType.ASCENSION_DOWN == data.type:
+                    if self.options.include_floor_checks.value != 0:
+                        # dumb math cause I've made this hard
+                        base_item_code = data.code - (CHAR_OFFSET*config.char_offset)
+                        amount = 1 if ASCENSION_LIST[base_item_code - 19].lower() in config.ascension_down else 0
                 elif self.options.shop_sanity.value != 0:
                     if ItemType.SHOP_CARD == data.type:
                         amount = self.options.shop_card_slots.value
@@ -290,9 +383,8 @@ class SlayTheSpire2World(World):
             if self.options.include_floor_checks.value:
 
                 # remaining_checks = 51 - ascension_downs
-                remaining_checks = 48
-                if config.ascension >= 10:
-                    # TODO: handle ascension downs
+                remaining_checks = 48 - len(config.ascension_down)
+                if 'DoubleBoss'.lower() in config.ascension and 'DoubleBoss'.lower() not in config.ascension_down:
                     remaining_checks += 1
 
                 # traps: list[bool] = [self.random.randint(0, 100) < self.options.trap_chance for _ in
@@ -401,6 +493,9 @@ class SlayTheSpire2World(World):
             "potion_sanity",
             "gold_sanity",
             "campfire_sanity",
+            "death_link",
+            "enable_death_fragments",
+            "death_link_damage_percent",
         ))
         return slot_data
 
@@ -439,19 +534,19 @@ class SlayTheSpire2World(World):
         self.options.potion_sanity.value = slot_data['potion_sanity']
         self.options.num_chars_goal.value = slot_data['num_chars_goal']
         self.location_id_to_alias: dict[int, str] = dict()
-        # pattern = re.compile("Custom Character [0-9]+ (?P<location_name>.*?)$")
+        pattern = re.compile("Custom Character [0-9]+ (?P<location_name>.*?)$")
         # for i in range(1, len(self.modded_chars) + 1):
-        # for key, value in SpireWorld.location_id_to_name.items():
-        #     if key < (len(character_list)) * CHAR_OFFSET:
-        #         continue
-        #     modded_index = (key // CHAR_OFFSET) - len(character_list)
-        #     self.logger.info(f"Modded index: {modded_index}")
-        #     self.logger.info(f"modded_chars index: {self.modded_chars}")
-        #     if modded_index >= len(self.modded_chars):
-        #         continue
-        #     match = pattern.match(value)
-        #     if match is None:
-        #         raise Exception("Failed to match " + value)
-        #     name = self.modded_chars[modded_index].official_name
-        #     self.logger.info(name)
-        #     self.location_id_to_alias[key] = name + " " + match.group("location_name")
+        for key, value in SlayTheSpire2World.location_id_to_name.items():
+            if key < (len(character_list)) * CHAR_OFFSET:
+                continue
+            modded_index = (key // CHAR_OFFSET) - len(character_list)
+            # self.logger.info(f"Modded index: {modded_index}")
+            # self.logger.info(f"modded_chars index: {self.modded_chars}")
+            if modded_index >= len(self.modded_chars):
+                continue
+            match = pattern.match(value)
+            if match is None:
+                raise Exception("Failed to match " + value)
+            name = self.modded_chars[modded_index].official_name
+            # self.logger.info(name)
+            self.location_id_to_alias[key] = name + " " + match.group("location_name")

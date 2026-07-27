@@ -1,12 +1,16 @@
+import typing
+from copy import deepcopy
 from dataclasses import dataclass
+from typing import List
 
 from Options import OptionSet, Range, Toggle, Visibility, Choice, TextChoice, OptionDict, OptionCounter, \
-    PerGameCommonOptions
+    PerGameCommonOptions, OptionGroup, DeathLink
 
+import schema
 from schema import Schema, Optional, And
 
 from .characters import character_list
-from .constants import NUM_CUSTOM
+from .constants import NUM_CUSTOM, ASCENSIONS
 
 
 class Characters(OptionSet):
@@ -20,6 +24,24 @@ class Characters(OptionSet):
     valid_keys = character_list
     default = ["Ironclad"]
     valid_keys_casefold = False
+
+class ModdedCharacters(OptionSet):
+    """Enter the list of modded characters to play as.  These must be the internal names of the
+    characters.  This option is ignored if use_advanced_characters is set to true.  Only 5
+    modded characters are allowed.
+
+    If using a modded character:
+    Enter the internal ID of the character to use.
+
+    If you don't know the exact ID to enter with the mod installed go to
+    `Archipelago Settings -> Archipelago` to view a list of installed modded character IDs.
+
+    If the chosen character mod is not installed, checks will be sent when another character
+    sends them.  If none of the chosen character mods are installed, you will be playing
+    a very boring Ironclad run.
+    """
+    display_name = "Modded Characters"
+    default = []
 
 class GoalNumChar(Range):
     """How many characters you need to complete a run with before you goal. 0 means all characters"""
@@ -41,7 +63,7 @@ class PickNumberCharacters(Range):
     """
     display_name = "Pick Number of Characters"
     range_start = 0
-    range_end = 5 + NUM_CUSTOM - 1
+    range_end = 5 + NUM_CUSTOM
     default = 0
 
 class LockCharacters(Choice):
@@ -65,12 +87,32 @@ class UnlockedCharacter(TextChoice):
     option_regent = 3
     option_necrobinder = 4
 
-class Ascension(Range):
-    """What Ascension do you wish to play with. Note that logic is written assuming ascension 1"""
+class Ascension(OptionSet):
+    """What Ascensions do you wish to play with. Note that logic is written assuming ascension 1
+        Valid values are the numbers for the ascensions, and the names for the ascensions.  When a number is provided
+        alone, all ascensions below that number will also be enabled.
+
+        The ascension names are as follows:
+        - 'SwarmingElites'
+        - 'WearyTraveler'
+        - 'Poverty'
+        - 'TightBelt'
+        - "AscenderBane"
+        - 'Inflation'
+        - 'Scarcity'
+        - 'ToughEnemies'
+        - 'DeadlyEnemies'
+        - 'DoubleBoss'
+    """
+    def __init__(self, value: typing.Iterable[str], random_str: str | None = None):
+        self.value = { str(x) for x in value }
+        self.random_str = random_str
+        super(OptionSet, self).__init__()
+
     display_name = "Ascension"
-    range_start = 0
-    range_end = 10
-    default = 1
+    valid_keys_casefold = False
+    valid_keys = { *[str(i) for i in range(1,11)], *ASCENSIONS.keys() }
+    default = list(ASCENSIONS.keys())[:1]
 
 # class FinalAct(Toggle):
 #     """Whether you will need to collect the 3 keys and beat the final act to complete the game."""
@@ -172,7 +214,6 @@ class CardReward(Toggle):
 
 class SeededRun(Toggle):
     """Whether each character should have a fixed seed to climb the spire with or not."""
-    visibility = Visibility.none
     display_name = "Seeded Run"
     default = 0
 
@@ -180,7 +221,7 @@ class AdvancedChar(Toggle):
     """Whether to use the advanced characters feature. The normal options for character, ascension, etc. are ignored.
     See the "advanced_characters" option.
     """
-    visibility = Visibility.none
+    visibility = Visibility.template
     display_name = "Advanced Characters"
     option_true = 1
     option_false = 0
@@ -191,14 +232,16 @@ class CharacterOptions(OptionDict):
     independently of each other.  No validation is done on the character name, so use carefully.
     Format is:
         <char name>:
-            ascension: <number>
-            ascension_down: <number>
+            ascension:
+                - <string or number>
+            ascension_down:
+                - <string or number>
 
     If using a modded character:
     Enter the internal ID of the character to use.
 
-     if you don't know the exact ID to enter with the mod installed go to
-    `Mods -> Archipelago Multi-world -> config` to view a list of installed modded character IDs.
+    If you don't know the exact ID to enter with the mod installed go to
+    `Archipelago Settings -> Archipelago` to view a list of installed modded character IDs.
 
     If the chosen character mod is not installed, checks will be sent when another character
     sends them.  If none of the chosen character mods are installed, you will be playing
@@ -206,32 +249,66 @@ class CharacterOptions(OptionDict):
     """
     # For those wondering why on earth there's an advanced character option
     # it's to support modded characters.
-    visibility = Visibility.none
+    visibility = Visibility.template
     default = {
         "ironclad": {
-            "ascension": 1,
+            "ascension": [1],
             # "final_act": 1,
-            "ascension_down": 0,
+            "ascension_down": [],
         }
     }
     schema = Schema({
         str: {
-            Optional("ascension", default=1): And(int,lambda n: 0 <= n <= 10),
+            Optional("ascension", default=[1]): [And(int,lambda n: 1 <= n <= 10), str],
             # Optional("final_act", default=0): And(int, lambda n: 0 <= n <= 1),
-            Optional("ascension_down", default=0): And(int, lambda n: 0 <= n <= 10),
+            Optional("ascension_down", default=[]): [And(int,lambda n: 1 <= n <= 10), str],
         }
     })
 
-class AscensionDown(Range):
-    """The number of ascension downs to add to the item pool, per character. Only valid when
+class AscensionDown(OptionSet):
+    """The ascension downs to add to the item pool, per character. Only valid when
     `use_advanced_characters` is false (see `advanced_characters`), and when `include_floor_checks` is true.
-    Will be ignored if invalid.
+    Valid values are the numbers for the ascensions, and also the names for the ascensions.  When a number is provided
+    alone, ascension downs for all the ones below will also be added to the pool.
+
+    - 'SwarmingElites'
+    - 'WearyTraveler'
+    - 'Poverty'
+    - 'TightBelt'
+    - "AscenderBane"
+    - 'Inflation'
+    - 'Scarcity'
+    - 'ToughEnemies'
+    - 'DeadlyEnemies'
+    - 'DoubleBoss'
 
     Logic does NOT account for this."""
-    visibility = Visibility.none
+    def __init__(self, value: typing.Iterable[str], random_str: str | None = None):
+        self.value = { str(x) for x in value }
+        self.random_str = random_str
+        super(OptionSet, self).__init__()
+
     display_name = "Ascension Down"
+    valid_keys_casefold = False
+    valid_keys = { *[str(i) for i in range(1,11)], *ASCENSIONS.keys() }
+    default = list()
+
+# Death Link Options
+
+class EnableDeathFragments(Toggle):
+    """If Death Link is enabled, turning this setting on gives you a Curse Card whenever
+    you receive a Death Link."""
+    display_name = "Enable Death Fragments"
+    default = 1
+
+class DeathLinkDamagePercent(Range):
+    """If Death Link is enabled, this setting determines how much damage you take when you receive a Death Link, 
+    as a percentage of your max health. 
+    If you do not want to take any damage, set this to 0. 
+    If you want to be killed whenever you receive a Death Link, set this to 100."""
+    display_name = "Death Link Damage Percent"
     range_start = 0
-    range_end = 10
+    range_end = 100
     default = 0
 
 # class TrapChance(Range):
@@ -288,7 +365,11 @@ class FillerWeights(OptionCounter):
 
 @dataclass
 class Spire2Options(PerGameCommonOptions):
+    death_link: DeathLink
+    enable_death_fragments: EnableDeathFragments
+    death_link_damage_percent: DeathLinkDamagePercent
     characters: Characters
+    modded_characters: ModdedCharacters
     pick_num_characters: PickNumberCharacters
     num_chars_goal: GoalNumChar
     lock_characters: LockCharacters
@@ -314,29 +395,3 @@ class Spire2Options(PerGameCommonOptions):
     shop_remove_slots: ShopRemoveSlots
     shop_sanity_costs: ShopSanityCosts
     seeded: SeededRun
-
-# option_groups: List[OptionGroup] = [
-#     OptionGroup("Sanities", [
-#         IncludeFloorChecks,
-#         CampfireSanity,
-#         GoldSanity,
-#         PotionSanity,
-#         KeySanity,
-#         ShopSanity,
-#         ShopCardSlots,
-#         ShopNeutralSlots,
-#         ShopRelicSlots,
-#         ShopPotionSlots,
-#         ShopRemoveSlots,
-#         ShopSanityCosts,
-#     ]),
-#     OptionGroup("Traps", [
-#         TrapChance,
-#         TrapWeights
-#     ]),
-#     OptionGroup("Misc", [
-#         ChattyMC,
-#         FillerWeights,
-#         SeededRun,
-#     ]),
-# ]

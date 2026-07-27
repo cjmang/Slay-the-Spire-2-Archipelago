@@ -7,6 +7,9 @@ using StS2AP.Extensions;
 using StS2AP.Utils;
 using static StS2AP.Data.CharTable;
 using MegaCrit.Sts2.Core.Saves;
+using MegaCrit.Sts2.Core.Entities.Cards;
+using MegaCrit.Sts2.Core.Entities.Ascension;
+using AscensionManager = StS2AP.Utils.AscensionManager;
 
 
 namespace StS2AP.Models
@@ -117,6 +120,8 @@ namespace StS2AP.Models
         /// </summary>
         public Dictionary<int, PotionModel> PotionAssignments { get; set; } = new Dictionary<int, PotionModel>();
 
+        public AscensionManager Ascensions = new AscensionManager();
+
         /// <summary>
         /// Returns the relic assigned to the given location, pulling one from the RelicFactory if it hasn't been assigned yet.
         /// This guarantees that the same relic is shown every time the reward screen is opened for the same item.
@@ -204,6 +209,8 @@ namespace StS2AP.Models
                     CampfiresChecked[checkName] = ArchipelagoClient.Session.Locations.AllLocationsChecked.Contains(locationId);
                 }
             }
+            Ascensions.Initialize(GameUtility.CurrentConfig);
+            LogUtility.Info($"Starting game with ascension levels {string.Join(",", Ascensions.CurrentAscension)}");
         }
 
         public void ResetTrackers()
@@ -218,6 +225,7 @@ namespace StS2AP.Models
             RelicAssignments.Clear();
             CardAssignments.Clear();
             PotionAssignments.Clear();
+            Ascensions.Reset();
             GoldRedeemed = 0;
         }
 
@@ -242,7 +250,7 @@ namespace StS2AP.Models
         /// The number of items we've received from the multiworld that we haven't used yet. 
         /// This is what gets displayed in the top bar UI.
         /// </summary>
-        public int UnusedItemCount => AllReceivedItems.Where(i => i.Item.GetStSCharID() == GameUtility.CurrentCharacterID && !i.Item.ItemDisplayName.Contains("Progressive") && !i.Item.ItemName.Contains("Progressive")).Count() - UsedItems.Count;
+        public int UnusedItemCount => AllReceivedItems.Where(i => i.Item.GetCharacterOffset() == GameUtility.CurrentConfig?.CharOffset && !i.Item.ItemDisplayName.Contains("Progressive") && !i.Item.ItemName.Contains("Progressive")).Count() - UsedItems.Count;
 
         #endregion
 
@@ -251,7 +259,7 @@ namespace StS2AP.Models
         /// <summary>
         /// ALL Gold received from the Multiworld
         /// </summary>
-        public Dictionary<APItemCharID, int> GoldReceived { get; set; } = new Dictionary<APItemCharID, int>();
+        public Dictionary<long, int> GoldReceived { get; set; } = new Dictionary<long, int>();
 
         /// <summary>
         /// The Gold you've redeemed so far this run
@@ -268,8 +276,12 @@ namespace StS2AP.Models
             {
                 try
                 {
-                    if (!GameUtility.CurrentCharacterID.HasValue) return -1;
-                    GoldReceived.TryGetValue(GameUtility.CurrentCharacterID.Value, out int gold);
+                    var config = GameUtility.CurrentConfig;
+                    if(config == null)
+                    {
+                        return -1;
+                    }
+                    GoldReceived.TryGetValue(config.CharOffset, out int gold);
                     return gold - GoldRedeemed;
                 }
                 catch
@@ -297,21 +309,21 @@ namespace StS2AP.Models
         /// <summary>
         /// Keeps track of the number of Progressive Smiths we've received for each character
         /// </summary>
-        public Dictionary<APItemCharID, int> ProgressiveSmiths = new Dictionary<APItemCharID, int>();
+        public Dictionary<long, int> ProgressiveSmiths = new Dictionary<long, int>();
 
         /// <summary>
         /// Keeps track of the number of Progressive Rests we've received for each character
         /// </summary>
-        public Dictionary<APItemCharID, int> ProgressiveRests = new Dictionary<APItemCharID, int>();
+        public Dictionary<long, int> ProgressiveRests = new Dictionary<long, int>();
 
         /// <summary>
         /// Gets the highest Act that a character can rest at
         /// </summary>
-        /// <param name="character">The Character's encoded ItemID</param>
+        /// <param name="character">The Character's offset</param>
         /// <returns>The highest Act (one-based) that the character can rest at</returns>
-        public int? MaxRestLevel(APItemCharID character)
+        public int? MaxRestLevel(long offset)
         {
-            var canRest = ProgressiveRests.TryGetValue(character, out int act);
+            var canRest = ProgressiveRests.TryGetValue(offset, out int act);
             if (!canRest) return null;
             return act;
         }
@@ -319,11 +331,11 @@ namespace StS2AP.Models
         /// <summary>
         /// Gets the highest Act that a character can smith at
         /// </summary>
-        /// <param name="character">The Character's encoded ItemID</param>
+        /// <param name="character">The Character's offset</param>
         /// <returns>The highest Act (one-based) that the character can smith at</returns>
-        public int? MaxSmithLevel(APItemCharID character)
+        public int? MaxSmithLevel(long offset)
         {
-            var canSmith = ProgressiveSmiths.TryGetValue(character, out int act);
+            var canSmith = ProgressiveSmiths.TryGetValue(offset, out int act);
             if (!canSmith) return null;
             return act;
         }
@@ -345,16 +357,19 @@ namespace StS2AP.Models
                 BossRewardsDistributed = BossRewardsDistributed,
                 UsedItems = UsedItems,
                 GoldRedeemed = GoldRedeemed,
-                RelicAssignments = RelicAssignments.Select((KeyValuePair<int,RelicModel> kv) => new KeyValuePair<int, SerializableRelic>(kv.Key, kv.Value.ToMutable().ToSerializable())).ToDictionary(),
-                CardAssignments = CardAssignments.Select((KeyValuePair<int,CardReward> kv) => new KeyValuePair<int, SerializableReward>(kv.Key, kv.Value.ToSerializable())).ToDictionary(),
-                PotionAssignments = PotionAssignments.Select((KeyValuePair<int,PotionModel> kv) => new KeyValuePair<int, SerializablePotion>(kv.Key, kv.Value.ToMutable().ToSerializable(-1))).ToDictionary(),
+                RelicAssignments = RelicAssignments.Select((KeyValuePair<int, RelicModel> kv) => new KeyValuePair<int, SerializableRelic>(kv.Key, kv.Value.ToMutable().ToSerializable())).ToDictionary(),
+                CardAssignments = CardAssignments.Select((KeyValuePair<int, CardReward> kv) => new KeyValuePair<int, SerializableReward>(kv.Key, kv.Value.ToSerializable())).ToDictionary(),
+                CardAssignmentModels = CardAssignments.Select((KeyValuePair<int, CardReward> kv) =>
+                new KeyValuePair<int, List<SerializableCard>>(kv.Key, kv.Value.Cards.Select(c => c.ToSerializable()).ToList())).ToDictionary(),
+                PotionAssignments = PotionAssignments.Select((KeyValuePair<int, PotionModel> kv) => new KeyValuePair<int, SerializablePotion>(kv.Key, kv.Value.ToMutable().ToSerializable(-1))).ToDictionary(),
+                Ascensions = Ascensions.CurrentAscension.Select((level) => ((int)level)).ToList()
             };
         }
 
         public static ArchipelagoProgress FromSerializable(SerializableAP saveData, Player player)
         {
-
-            return new ArchipelagoProgress()
+            LogUtility.Info($"Card Assignments {string.Join(",", saveData.CardAssignments)}");
+            var progress = new ArchipelagoProgress()
             {
                 CardRewardsAttempted = saveData.CardRewardsAttempted,
                 RareCardRewardsAttempted = saveData.RareCardRewardsAttempted,
@@ -365,9 +380,49 @@ namespace StS2AP.Models
                 UsedItems = new List<int>(saveData.UsedItems),
                 GoldRedeemed = saveData.GoldRedeemed,
                 RelicAssignments = saveData.RelicAssignments.Select((KeyValuePair<int, SerializableRelic> kv) => new KeyValuePair<int, RelicModel>(kv.Key, RelicModel.FromSerializable(kv.Value).CanonicalInstance)).ToDictionary(),
-                CardAssignments = saveData.CardAssignments.Select((KeyValuePair<int, SerializableReward> kv) => new KeyValuePair<int, CardReward>(kv.Key, (CardReward) CardReward.FromSerializable(kv.Value, player))).ToDictionary(),
                 PotionAssignments = saveData.PotionAssignments.Select((KeyValuePair<int, SerializablePotion> kv) => new KeyValuePair<int, PotionModel>(kv.Key, PotionModel.FromSerializable(kv.Value).CanonicalInstance)).ToDictionary(),
             };
+
+            var cardModels = new Dictionary<int, List<CardModel>>();
+            foreach(var kv in saveData.CardAssignmentModels)
+            {
+                var models = kv.Value.Select(cs => player.RunState.CreateCard(CardModel.FromSerializable(cs).CanonicalInstance, player)).ToList();
+                cardModels[kv.Key] = models;
+            }
+
+            var cardsInfo = typeof(CardReward).GetField("_cards", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            if(cardsInfo == null)
+            {
+                LogUtility.Error("Failed to reflectively access card reward field; cannot repopulate from save");
+                return progress;
+            }
+
+            var cardRewards = new Dictionary<int, CardReward>();
+            foreach(var kv in saveData.CardAssignments)
+            {
+                if(cardModels.TryGetValue(kv.Key, out var cards))
+                {
+                    var reward = (CardReward) CardReward.FromSerializable(kv.Value, player);
+                    cardRewards[kv.Key] = reward;
+                    List<CardCreationResult> cardCreations = (List<CardCreationResult>) cardsInfo.GetValue(reward);
+                    foreach(var card in cards)
+                    {
+                        cardCreations?.Add(new CardCreationResult(card));
+                    }
+                }
+                else
+                {
+                    LogUtility.Error($"Could not recover card list from save for reward {kv.Key}");
+                }
+            }
+
+            var ascensionLevels = saveData.Ascensions?.Select((level) => (AscensionLevel)level).ToHashSet() ?? new HashSet<AscensionLevel>();
+
+            progress.Ascensions.Initialize(GameUtility.CurrentConfig, ascensionLevels);
+
+            progress.CardAssignments = cardRewards;
+
+            return progress;
         }
 
         #endregion
