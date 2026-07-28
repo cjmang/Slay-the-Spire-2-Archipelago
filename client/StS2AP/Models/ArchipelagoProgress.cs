@@ -317,6 +317,11 @@ namespace StS2AP.Models
         public Dictionary<long, int> ProgressiveRests = new Dictionary<long, int>();
 
         /// <summary>
+        /// Keeps track of the number of Ancient Unlocks we've received for each character
+        /// </summary>
+        public Dictionary<long, int> AncientUnlocks = new Dictionary<long, int>();
+
+        /// <summary>
         /// Gets the highest Act that a character can rest at
         /// </summary>
         /// <param name="character">The Character's offset</param>
@@ -338,6 +343,25 @@ namespace StS2AP.Models
             var canSmith = ProgressiveSmiths.TryGetValue(offset, out int act);
             if (!canSmith) return null;
             return act;
+        }
+
+        /// <summary>
+        /// Returns the highest Act that a character can receive Ancient Rewards at
+        /// </summary>
+        /// <param name="character"> The Character's offset</param>
+        /// <returns>The highest Act (one-based) that the character can receive Ancient Rewards at </returns>
+        public int MaxAncientUnlock(long offset)
+        {
+            int count;
+            if(!AncientUnlocks.TryGetValue( offset, out count))
+            {
+                count = 0;
+            }
+            if(!ArchipelagoClient.Settings.NeowSanity)
+            {
+                count++;
+            }
+            return count;
         }
 
         #endregion

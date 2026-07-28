@@ -175,8 +175,8 @@ namespace StS2AP.Patches
                 }
 
                 // Update Relic Rewards (both regular and boss relics)
-                var relicCount = (itemCounts.TryGetValue(ItemTable.APItem.Relic, out int relicStandard) ? relicStandard : 0) +
-                                 (itemCounts.TryGetValue(ItemTable.APItem.BossRelic, out int relicBoss) ? relicBoss : 0);
+                var relicCount = itemCounts.TryGetValue(ItemTable.APItem.Relic, out int relicStandard) ? relicStandard : 0;
+                                 //(itemCounts.TryGetValue(ItemTable.APItem.AncientUnlock, out int relicBoss) ? relicBoss : 0);
                 ArchipelagoCharTrackerUI.RelicRewards?.SetText(relicCount.ToString());
 
                 // Update Potion Rewards
