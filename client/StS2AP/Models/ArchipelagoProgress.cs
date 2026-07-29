@@ -60,6 +60,15 @@ namespace StS2AP.Models
         /// </summary>
         public const int _maxCampfireChecks = 6;
 
+        /// <summary>
+        /// Maximum number of Ancient Rewards a player could find. Depends on settings.
+        /// </summary>
+        public static int MaxAncientRewards { 
+            get {
+                return ArchipelagoClient.Settings?.NeowSanity ?? false ? 3 : 2;
+            } 
+        }
+
         #region Per-Run Tracker
 
         /// <summary>
