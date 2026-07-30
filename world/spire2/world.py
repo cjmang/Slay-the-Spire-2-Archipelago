@@ -195,7 +195,7 @@ class SlayTheSpire2World(World):
         for asc in ascensions:
             try:
                 number = int(asc)
-                ret.add(ASCENSION_LIST[number].lower())
+                ret.add(ASCENSION_LIST[number - 1].lower())
             except:
                 ret.add(asc.lower())
         return ret
@@ -221,7 +221,7 @@ class SlayTheSpire2World(World):
         for asc in ascensions:
             try:
                 number = int(asc)
-                ret.add(ASCENSION_LIST[number].lower())
+                ret.add(ASCENSION_LIST[number - 1].lower())
             except:
                 ret.add(asc.lower())
         return ret
