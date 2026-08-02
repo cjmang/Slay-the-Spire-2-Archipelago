@@ -369,7 +369,8 @@ namespace StS2AP
         {
             var characters = Settings.Characters;
             var ids = new HashSet<string>(
-                ArchipelagoClient.Progress.UnlockedCharacters.Select(c => c.Id.Entry)
+                Progress.UnlockedCharacters.Select(c => c.Id.Entry),
+                StringComparer.InvariantCultureIgnoreCase
             );
             bool someoneUnlocked = false;
             foreach (var c in characters)
@@ -389,11 +390,11 @@ namespace StS2AP
                 {
                     if (characters.ContainsKey(c.Id.Entry))
                     {
-                        ArchipelagoClient.Progress.UnlockedCharacters.Add(c);
+                        Progress.UnlockedCharacters.Add(c);
                         break;
                     }
                 }
-                if (ArchipelagoClient.Progress.UnlockedCharacters.Count == 0)
+                if (Progress.UnlockedCharacters.Count == 0)
                 {
                     LogUtility.Error(
                         $"No valid AP characters found to unlock!  Valid characters: {string.Join(",", characters.Keys)}; Existing: {
@@ -403,7 +404,7 @@ namespace StS2AP
                 else
                 {
                     LogUtility.Info(
-                        $"Force unlocking character {ArchipelagoClient.Progress.UnlockedCharacters.First().Id.Entry}"
+                        $"Force unlocking character {Progress.UnlockedCharacters.First().Id.Entry}"
                     );
                 }
                 //__result = newResult;
