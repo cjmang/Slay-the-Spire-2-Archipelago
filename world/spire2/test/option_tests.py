@@ -41,9 +41,46 @@ class Test48Floors(Spire2TestBase):
             "ironclad",
             "silent",
         ],
-        "ascension": 9
+        "ascension": [9]
     }
 
     def test_no_floor_49(self):
         self.assertFalse( "Ironclad Reached Floor 49" in self.world.get_locations())
 
+
+class TestAscensionDowns(Spire2TestBase):
+    options = {
+        "characters": [
+            "silent"
+        ],
+        "ascension": [9],
+        "ascension_down": [3],
+    }
+
+    def test_high_ascension_downs_shuffled(self):
+        for item in self.world.multiworld.itempool:
+            if 'Scarcity' in item.name:
+                break
+        else:
+            raise Exception("Failed to find ascension down")
+
+class TestAscensionDownNumbers(Spire2TestBase):
+    options = {
+        "characters": [
+            "silent"
+        ],
+        "ascension": ["10"],
+        "ascension_down": ["10","9", "8"],
+    }
+
+    def test_has_double_boss(self):
+        for item in self.world.multiworld.itempool:
+            if 'Double Boss' in item.name:
+                break
+        else:
+            raise Exception("Failed to find Double Boss")
+
+    def test_no_swarming_elites(self):
+        for item in self.world.multiworld.itempool:
+            if 'Swarming Elites' in item.name:
+                raise Exception("Found Swarming Elites")

@@ -21,10 +21,15 @@ namespace StS2AP.Data
         private static long CombineLocationAndCharacterIds(long locationId, CharacterModel character)
         {
             // Character offset (for locations this is zero-based, so it needs to be shifted)
-            long _characterOffset = character.GetAPLocationCharID();
+            long? _characterOffset = character.GetCharacterOffset();
+            if(_characterOffset == null)
+            {
+                LogUtility.Error($"Got unsupported character {character.APName()}");
+                return -1;
+            }
 
             // Place the character offset in the leftmost position and location ID in the rightmost 4 digits (zero-padded)
-            return (_characterOffset * 10000) + locationId;
+            return (long) _characterOffset + locationId;
         }
 
         /// <summary>
@@ -94,6 +99,16 @@ namespace StS2AP.Data
         public static List<long> GetRelicRewardLocations(CharacterModel character)
         {
             return GetLocationsByPattern($"{character.APName()} Relic #", ArchipelagoProgress._maxRelicRewards);
+        }
+
+        /// <summary>
+        /// Returns all location IDs for Ancient Rewards for a given character.
+        /// </summary>
+        /// <param name="character">The character to get Ancient Reward locations for.</param>
+        /// <returns>A list of location IDs for the specified character's Ancient Rewards.</returns>
+        public static List<long> GetAncientRewardLocations(CharacterModel character)
+        {
+            return GetLocationsByPattern($"{character.APName()} Ancient Act #", ArchipelagoProgress.MaxAncientRewards);
         }
 
         /// <summary>

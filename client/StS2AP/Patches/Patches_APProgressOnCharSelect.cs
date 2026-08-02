@@ -35,6 +35,10 @@ namespace StS2AP.Patches
             /// </summary>
             public static void UpdateCheckedLocations(CharacterModel character)
             {
+                if(!ArchipelagoClient.Settings.Characters.ContainsKey(character.Id.Entry))
+                {
+                    return;
+                }
                 // Update Card Locations
                 var cardLocations = LocationData.GetCardRewardLocations(character);
                 SetCheckedLocation(ArchipelagoCharTrackerUI.CardChecks, cardLocations, ArchipelagoProgress._maxCardRewards / (ArchipelagoClient.Settings.ShouldShuffleAllCards ? 1 : 2));
@@ -46,6 +50,11 @@ namespace StS2AP.Patches
                 // Update Relic Locations
                 var relicLocations = LocationData.GetRelicRewardLocations(character);
                 SetCheckedLocation(ArchipelagoCharTrackerUI.RelicChecks, relicLocations, ArchipelagoProgress._maxRelicRewards);
+                
+                // Update Ancient Locations
+                var ancientLocations = LocationData.GetAncientRewardLocations(character);
+                SetCheckedLocation(ArchipelagoCharTrackerUI.AncientChecks, ancientLocations, ArchipelagoProgress.MaxAncientRewards);
+
 
                 // Update Floorsanity Locations
                 if (ArchipelagoClient.Settings.Floorsanity)
@@ -112,34 +121,41 @@ namespace StS2AP.Patches
             /// </summary>
             public static void UpdateReceivedItems(CharacterModel characterModel)
             {
+                if(!ArchipelagoClient.Settings.Characters.ContainsKey(characterModel.Id.Entry))
+                {
+                    // Not sure how this is getting called with something that doesn't belong, but just in case.
+                    return;
+                }
                 // Get Character ID
-                var id = characterModel.GetAPItemCharID();
-                LogUtility.Info($"Selected Character: {characterModel.APName()}, AP Char ID: {(id.HasValue ? id.Value.ToString() : "null")}");
+                long? checkMe = characterModel.GetCharacterOffset();
+                LogUtility.Info($"Selected Character: {characterModel.APName()}, AP Char ID: {checkMe}");
 
                 // If (somehow) the character ID is null, stop
-                if (!id.HasValue) return;
+                if (checkMe == null ) return;
 
+                long offset = (long) checkMe;
                 // Update Gold Rewards
-                LogUtility.Info($"Checking for gold rewards for character ID {id.Value}");
-                if (ArchipelagoClient.Progress.GoldReceived.TryGetValue(id.Value, out int gold))
+                LogUtility.Info($"Checking for gold rewards for character ID {offset}");
+                if (ArchipelagoClient.Progress.GoldReceived.TryGetValue(offset, out int gold))
                 {
-                    LogUtility.Info($"Found gold rewards for character ID {id.Value}: {gold}");
+                    LogUtility.Info($"Found gold rewards for character ID {offset}: {gold}");
                     ArchipelagoCharTrackerUI.GoldRewards?.SetText(gold.ToString());
                 }
                 else
                 {
-                    LogUtility.Error($"No gold rewards found for character ID {id.Value}");
+                    LogUtility.Error($"No gold rewards found for character ID {offset}");
                     ArchipelagoCharTrackerUI.GoldRewards?.SetText("0");
                 }
 
                 // Update Progressive Smiths/Rests
-                ArchipelagoCharTrackerUI.ProgressiveRestLabel?.SetText($"({ArchipelagoClient.Progress.MaxRestLevel(id.Value) ?? 0} / 3)");
-                ArchipelagoCharTrackerUI.ProgressiveSmithLabel?.SetText($"({ArchipelagoClient.Progress.MaxSmithLevel(id.Value) ?? 0} / 3)");
+                ArchipelagoCharTrackerUI.ProgressiveRestLabel?.SetText($"({ArchipelagoClient.Progress.MaxRestLevel(offset) ?? 0} / 3)");
+                ArchipelagoCharTrackerUI.ProgressiveSmithLabel?.SetText($"({ArchipelagoClient.Progress.MaxSmithLevel(offset) ?? 0} / 3)");
+                ArchipelagoCharTrackerUI.AncientRewards?.SetText($"{ArchipelagoClient.Progress.MaxAncientUnlock(offset)} / 3");
 
                 // Count Card/Relic/Potion/Progressive Rewards
                 var itemCounts = ArchipelagoClient.Progress.AllReceivedItems
-                    .Where(i => i.Item.GetStSCharID() == id.Value)
-                    .GroupBy(i => i.Item.GetRawItemID())
+                    .Where(i => i.Item.GetCharacterOffset() == offset)
+                    .GroupBy(i => i.Item.GetCharacterSpecificItemID())
                     .ToDictionary(
                         g => g.Key,
                         g => g.Count());
@@ -165,8 +181,8 @@ namespace StS2AP.Patches
                 }
 
                 // Update Relic Rewards (both regular and boss relics)
-                var relicCount = (itemCounts.TryGetValue(ItemTable.APItem.Relic, out int relicStandard) ? relicStandard : 0) +
-                                 (itemCounts.TryGetValue(ItemTable.APItem.BossRelic, out int relicBoss) ? relicBoss : 0);
+                var relicCount = itemCounts.TryGetValue(ItemTable.APItem.Relic, out int relicStandard) ? relicStandard : 0;
+                                 //(itemCounts.TryGetValue(ItemTable.APItem.AncientUnlock, out int relicBoss) ? relicBoss : 0);
                 ArchipelagoCharTrackerUI.RelicRewards?.SetText(relicCount.ToString());
 
                 // Update Potion Rewards

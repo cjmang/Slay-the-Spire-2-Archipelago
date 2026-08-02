@@ -29,13 +29,13 @@ def _create_regions(world: 'SlayTheSpire2World', player: int, config: 'Character
     prefix = config.name
     multiworld = world.multiworld
     every_other = not world.options.shuffle_all_cards
-    # TODO: update for ascension down?
-    ascension_mod = 0 if config.ascension <= 9 else 1
+    ascension_mod = 1 if 'DoubleBoss'.lower() in config.ascension and 'DoubleBoss'.lower() not in config.ascension_down else 0
     first_char_region = world.create_region(player, prefix, 'Early Act 1', config,
                                             [
                                                 "Press Start",
                                                 "Potion Drop 1",
                                                 "Act 1 Campfire 1",
+                                                "Ancient Act 1",
                                                 *_create_floor_check(1,6),
                                                 *_create_combat_check(1,4),
                                                 *_create_card_rewards(1, 4, every_other)
@@ -79,6 +79,7 @@ def _create_regions(world: 'SlayTheSpire2World', player: int, config: 'Character
 
     multiworld.regions.append(world.create_region(player, prefix, 'Early Act 2', config,
                                                   [
+                                                      "Ancient Act 2",
                                                       "Potion Drop 4",
                                                       *_create_floor_check(18, 22),
                                                       "Act 2 Campfire 1",
@@ -119,6 +120,7 @@ def _create_regions(world: 'SlayTheSpire2World', player: int, config: 'Character
 
     multiworld.regions.append(world.create_region(player, prefix, 'Early Act 3', config,
                                                   [
+                                                      "Ancient Act 3",
                                                       "Potion Drop 7",
                                                       "Act 3 Campfire 1",
                                                       *_create_floor_check(34, 38),

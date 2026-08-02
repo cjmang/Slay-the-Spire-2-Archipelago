@@ -1,4 +1,6 @@
-﻿using System;
+﻿using MegaCrit.Sts2.Core.Commands;
+using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -17,6 +19,7 @@ namespace StS2AP.Models
     /// </summary>
     public class ArchipelagoSettings
     {
+        // TODO: update to be a set
         public int AscensionLevel { get; set; }
 
         /// <summary>
@@ -35,8 +38,16 @@ namespace StS2AP.Models
         /// A collection of characters that are available in the Multiworld (i.e. have checks for this Slot)
         /// 
         /// This is *not* a collection of which characters are unlocked, just which characters *can* be unlocked for this slot.
+        /// Official Name -> CharacterConfig
         /// </summary>
-        public string[] AvailableCharacters { get; set; } = Array.Empty<string>();
+        public IDictionary<string, CharacterConfig> Characters { get; set;} = new ConcurrentDictionary<string, CharacterConfig>(StringComparer.InvariantCultureIgnoreCase);
+
+        /// <summary>
+        /// The collection of characters that are unrecognized by the mod.  Needed so we can send out unlocks.
+        /// </summary>
+        public IDictionary<string, CharacterConfig> UnrecognizedCharacters { get; set; } = new ConcurrentDictionary<string, CharacterConfig>(StringComparer.InvariantCultureIgnoreCase);
+
+        public bool NeowSanity { get; set; }
         public bool CampfireSanity { get; set; }
         public bool GoldSanity { get; set; }
         public bool PotionSanity { get; set; }

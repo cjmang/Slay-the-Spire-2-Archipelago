@@ -14,7 +14,7 @@ namespace StS2AP.Data
             CardReward = 1,
             RareCardReward = 2,
             Relic = 3,
-            BossRelic = 4,
+            AncientUnlock = 4,
             OneGold = 5,
             FiveGold = 6,
             ProgressiveRest = 7,
@@ -29,7 +29,36 @@ namespace StS2AP.Data
             _30Gold = 16,
             BossGold = 17,
             Potion = 18,
-            AscensionDown = 19
+            SwarmingElites = 19,
+            WearyTraveler = 20,
+            Poverty = 21,
+            TightBelt = 22,
+            AscenderBane = 23,
+            Inflation = 24,
+            Scarcity = 25,
+            ToughEnemies = 26,
+            DeadlyEnemies = 27,
+            DoubleBoss = 28,
+
+            /// ── Ephemeral Buff items (universal / character-agnostic) ──────────────────
+            /// These are one-time-use filler items that apply a temporary in-combat buff
+            /// when received. Unlike run rewards (gold, cards, relics), buffs are never
+            /// reapplied on subsequent runs. Consumption is tracked permanently in the
+            /// Archipelago server's DataStorage. IDs match universal_items in items.py.
+            FreeAttack = 500,
+            FreePower = 501,
+            FreeSkill = 502,
+            Dexterity = 503,
+            Strength = 504,
+            Plating = 505,
+            Friendship = 506,
+            PostCombatCardUpgrade = 507,
+            PostCombatCardRemoval = 508,
+            AdditionalCardReward = 509,
+            Buffer = 510,
+            Vigor = 511,
+            Thorns = 512,
+            Artifact = 513,
         }
 
         public static Dictionary<int, string> Items = new Dictionary<int, string>
@@ -38,7 +67,7 @@ namespace StS2AP.Data
             { 1, "Card Reward" },
             { 2, "Rare Card Reward" },
             { 3, "Relic" },
-            { 4, "Boss Relic" },
+            { 4, "Ancient Unlock" },
             { 5, "One Gold" },
             { 6, "Five Gold" },
             { 7, "Progressive Rest" },
@@ -53,7 +82,30 @@ namespace StS2AP.Data
             { 16, "30 Gold" },
             { 17, "Boss Gold" },
             { 18, "Potion" },
-            { 19, "Ascension Down" }
+            { 19, "Swarming Elites" },
+            { 20, "Weary Traveler" },
+            { 21, "Poverty" },
+            { 22, "Tight Belt" },
+            { 23, "Ascender's Bane" },
+            { 24, "Inflation" },
+            { 25, "Scarcity" },
+            { 26, "Tough Enemies" },
+            { 27, "Deadly Enemies" },
+            { 28, "Double Boss" },
+            { 500, "Free Attack" },
+            { 501, "Free Power" },
+            { 502, "Free Skill" },
+            { 503, "Dexterity" },
+            { 504, "Strength" },
+            { 505, "Plating" },
+            { 506, "Friendship" },
+            { 507, "Post-Combat Card Upgrade" },
+            { 508, "Post-Combat Card Removal" },
+            { 509, "Additional Card Reward" },
+            { 510, "Buffer" },
+            { 511, "Vigor" },
+            { 512, "Thorns" },
+            { 513, "Artifact" },
         };
 
         /// <summary>
@@ -65,7 +117,52 @@ namespace StS2AP.Data
             { APItem.FiveGold, 5 },
             { APItem._15Gold, 15 },
             { APItem._30Gold, 30 },
-            { APItem.BossGold, 100 }
+            { APItem.BossGold, 100 },
         };
+
+        public static bool CanBePickedUp(this APItem item)
+        {
+            switch(item)
+            {
+              case APItem.CAWCAW:
+                   return false;
+              case APItem.CardReward:
+              case APItem.RareCardReward:
+              case APItem.Relic:
+                    return true;
+              case APItem.AncientUnlock:
+                    return false;
+              case APItem.ProgressiveRest:
+              case APItem.ProgressiveSmith:
+              case APItem.ShopCardSlot:
+              case APItem.NeutralShopCardSlot:
+              case APItem.ShopRelicSlot:
+              case APItem.ShopPotionSlot:
+              case APItem.ProgressiveShopRemove:
+                    return false;
+              case APItem.Unlock:
+                    return false;
+              case APItem.OneGold:
+              case APItem.FiveGold:
+              case APItem._15Gold:
+              case APItem._30Gold:
+              case APItem.BossGold:
+                    return false;
+              case APItem.Potion:
+                    return true;
+              case APItem.SwarmingElites:
+              case APItem.WearyTraveler:
+              case APItem.Poverty:
+              case APItem.TightBelt:
+              case APItem.AscenderBane:
+              case APItem.Inflation:
+              case APItem.Scarcity:
+              case APItem.ToughEnemies:
+              case APItem.DeadlyEnemies:
+              case APItem.DoubleBoss:
+                    return false;
+            }
+            return false;
+        }
     }
 }

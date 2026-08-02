@@ -141,7 +141,7 @@ namespace StS2AP.Patches
             => Math.Min(categoryMax - Math.Min(shuffledCount, categoryMax) + received, categoryMax);
 
         /// <summary>Looks up a per-character received count, defaulting to 0 when the character has no entry yet</summary>
-        private static int GetReceived(Dictionary<APItemCharID, int> source, APItemCharID id)
+        private static int GetReceived(Dictionary<long, int> source, long id)
             => source.TryGetValue(id, out int v) ? v : 0;
 
         /// <summary>
