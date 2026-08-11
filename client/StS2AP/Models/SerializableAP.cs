@@ -13,7 +13,10 @@ namespace StS2AP.Models
     public class SerializableAP
     {
         [JsonPropertyName("save_data")]
-        public SerializableRun? SaveData { get; set; }
+        // Keep the base-game save opaque to AP's source-generated serializer. The
+        // running game must serialize and deserialize this payload with its own
+        // MegaCritSerializerContext so public and beta save schemas can differ.
+        public JsonElement? SaveData { get; set; }
         [JsonPropertyName("card_rewards_attempted")]
         public int CardRewardsAttempted { get; set; }
         [JsonPropertyName("rare_card_rewards_attempted")]
@@ -26,8 +29,10 @@ namespace StS2AP.Models
         public int PotionRewardsAttempted { get; set; }
         [JsonPropertyName("boss_rewards_distributed")]
         public int BossRewardsDistributed { get; set; }
-        [JsonPropertyName("relic_assignments")]
-        public Dictionary<int, SerializableRelic> RelicAssignments { get; set; } = new Dictionary<int, SerializableRelic>();
+        [JsonPropertyName("relic_choice_assignments")]
+        public Dictionary<int, List<SerializableRelic>> RelicChoiceAssignments { get; set; } = new Dictionary<int, List<SerializableRelic>>();
+        [JsonPropertyName("ancient_relic_choice_assignments")]
+        public Dictionary<int, List<SerializableRelic>> AncientRelicChoiceAssignments { get; set; } = new Dictionary<int, List<SerializableRelic>>();
         [JsonPropertyName("card_assignments")]
         public Dictionary<int, SerializableReward> CardAssignments { get; set; } = new Dictionary<int, SerializableReward>();
         [JsonPropertyName("card_models")]
