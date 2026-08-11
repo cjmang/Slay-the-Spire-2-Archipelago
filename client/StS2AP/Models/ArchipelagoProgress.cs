@@ -5,13 +5,13 @@ using MegaCrit.Sts2.Core.Saves.Runs;
 using MegaCrit.Sts2.Core.Rewards;
 using StS2AP.Extensions;
 using StS2AP.Utils;
-using static StS2AP.Data.CharTable;
 using MegaCrit.Sts2.Core.Saves;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Ascension;
 using AscensionManager = StS2AP.Utils.AscensionManager;
 using static StS2AP.Data.ItemTable;
 using System.Text.Json;
+using System.Collections.Concurrent;
 
 
 namespace StS2AP.Models
@@ -342,8 +342,10 @@ namespace StS2AP.Models
 
         /// <summary>
         /// All items we've received from the multiworld. Gets dumped into `AvailableItems` at the start of each run.
+        /// NOTE: This is unordered.  If you need to care about the order of the items received, you will need to
+        /// sort on the index.
         /// </summary>
-        public List<IndexedItemInfo> AllReceivedItems = new List<IndexedItemInfo>();
+        public ConcurrentBag<IndexedItemInfo> AllReceivedItems = new ConcurrentBag<IndexedItemInfo>();
 
         /// <summary>
         /// Any items that have been used up in the current run live here. The difference between this and `AllReceivedItems` 
