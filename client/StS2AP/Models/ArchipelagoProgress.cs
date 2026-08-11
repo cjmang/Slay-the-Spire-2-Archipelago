@@ -351,7 +351,7 @@ namespace StS2AP.Models
         /// Any items that have been used up in the current run live here. The difference between this and `AllReceivedItems` 
         /// represents the items still available for use.
         /// </summary>
-        public List<int> UsedItems = new List<int>();
+        public ConcurrentBag<int> UsedItems = new ConcurrentBag<int>();
 
         /// <summary>
         /// The number of items we've received from the multiworld that we haven't used yet. 
@@ -589,7 +589,7 @@ namespace StS2AP.Models
                 GoldRewardsAttempted = GoldRewardsAttempted,
                 PotionRewardsAttempted = PotionRewardsAttempted,
                 BossRewardsDistributed = BossRewardsDistributed,
-                UsedItems = UsedItems,
+                UsedItems = new List<int>(UsedItems),
                 GoldRedeemed = GoldRedeemed,
                 RelicChoiceAssignments = RelicChoiceAssignments.Select(kv =>
                     new KeyValuePair<int, List<SerializableRelic>>(
@@ -628,7 +628,7 @@ namespace StS2AP.Models
                 GoldRewardsAttempted = saveData.GoldRewardsAttempted,
                 PotionRewardsAttempted = saveData.PotionRewardsAttempted,
                 BossRewardsDistributed = saveData.BossRewardsDistributed,
-                UsedItems = new List<int>(saveData.UsedItems),
+                UsedItems = new ConcurrentBag<int>(saveData.UsedItems),
                 GoldRedeemed = saveData.GoldRedeemed,
                 RelicChoiceAssignments = saveData.RelicChoiceAssignments.Select(kv =>
                     new KeyValuePair<int, List<RelicModel>>(
