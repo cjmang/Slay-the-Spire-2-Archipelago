@@ -112,8 +112,6 @@ namespace StS2AP.Patches
             if (item.ItemId < 10000)
             {
                 HandleUniversalItem(item, index);
-                if (refresh)
-                    ArchipelagoTopBarUI.RefreshCount();
                 return;
             }
 
@@ -277,12 +275,6 @@ namespace StS2AP.Patches
                         Progress.AllReceivedItems.Add(indexedInfo);
                     break;
                 }
-            }
-
-            if (refresh)
-            {
-                // Refresh the unused item count
-                ArchipelagoTopBarUI.RefreshCount();
             }
         }
 
