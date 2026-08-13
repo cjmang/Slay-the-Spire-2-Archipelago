@@ -125,7 +125,6 @@ class TestAscensionDownNumbers(Spire2TestBase):
     def test_has_double_boss(self):
         for item in self.world.multiworld.itempool:
             if item.name == "Silent Disable Double Boss":
-            if 'Double Boss' in item.name:
                 break
         else:
             raise Exception("Failed to find Double Boss")
@@ -193,3 +192,10 @@ class TestProgressiveStartersRequireFloorChecks(Spire2TestBase):
         slot_data = self.world.fill_slot_data()
         self.assertEqual(slot_data["progressive_starter_card"], 0)
         self.assertEqual(slot_data["progressive_starter_relic"], 0)
+
+
+class TestEnsureShopWithNoGoldWorks(Spire2TestBase):
+    options = {
+        "shop_sanity": True,
+        "gold_sanity": False,
+    }
