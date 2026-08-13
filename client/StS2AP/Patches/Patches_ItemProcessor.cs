@@ -9,6 +9,7 @@ using StS2AP.Models;
 using StS2AP.UI;
 using StS2AP.Utils;
 using System.Collections.Concurrent;
+using StS2AP.Extensions;
 using static StS2AP.Data.ItemTable;
 
 namespace StS2AP.Patches 
@@ -95,7 +96,7 @@ namespace StS2AP.Patches
         /// </summary>
         /// <param name="item">Received Item</param>
         /// <param name="index">The index of the item in the Archipelago Multiworld</param>
-        private static void ProcessItem(IndexedItemInfo indexedInfo, bool refresh = true)
+        private static void ProcessItem(IndexedItemInfo indexedInfo, bool liveDelivery = true)
         {
             var Progress = ArchipelagoClient.Progress;
             var Settings = ArchipelagoClient.Settings;
@@ -175,6 +176,35 @@ namespace StS2AP.Patches
                     HandleThreshholdItem(item, Progress.ProgressiveStarterRelics, "Progressive Starter Relics");
                     ProgressiveStarterUtility.QueueReconcileCurrentPlayer();
                     break;
+                case APItem.Relic:
+                {
+                    // Save loading replays the whole item list, then reconciles once at the end.
+                    if (!liveDelivery)
+                    {
+                        Progress.AllReceivedItems.Add(new IndexedItemInfo(item, index));
+                        return;
+                    }
+
+                    // Keep every receipt. Other characters and out-of-run deliveries may
+                    // matter when their run starts or a checkpoint is loaded.
+                    Progress.AllReceivedItems.Add(new IndexedItemInfo(item, index));
+
+                    var player = GameUtility.CurrentPlayer;
+                    var characterOffset = player?.Character.GetCharacterOffset();
+                    if (player == null
+                        || !characterOffset.HasValue
+                        || item.GetCharacterOffset() != characterOffset.Value)
+                    {
+                        return;
+                    }
+
+                    // A receipt arriving after its Elite/chest reward belongs in the AP menu.
+                    // Reconcile all pairs so checkpoint loads do not depend on callback order.
+                    RelicRewardUtility.ReconcileBankedRewards(player);
+                    if (ArchipelagoRewardUI.IsOpen)
+                        ArchipelagoRewardUI.ShowRewards();
+                    return;
+                }
                 // Gold is condensed into a single reward pool
                 case APItem.OneGold:
                 case APItem.FiveGold:

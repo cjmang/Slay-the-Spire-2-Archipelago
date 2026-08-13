@@ -9,6 +9,7 @@ using MegaCrit.Sts2.Core.Localization;
 using MegaCrit.Sts2.Core.Models;
 using Newtonsoft.Json.Linq;
 using StS2AP.Data;
+using StS2AP.Extensions;
 using StS2AP.Models;
 using StS2AP.Patches;
 using StS2AP.UI;
@@ -137,6 +138,8 @@ namespace StS2AP
         private static int _rewardCountReceivedItems = -1;
         private static int _rewardCountUsedItems = -1;
         private static int _rewardCountGoldRemaining = int.MinValue;
+        private static int _rewardCountRelicChoiceAssignments = -1;
+        private static int _rewardCountRelicsAvailableAnytime = -1;
         private static int _cachedAvailableRewardCount;
 
         /// <summary>
@@ -168,12 +171,16 @@ namespace StS2AP
                 int receivedItems = Progress.AllReceivedItems.Count;
                 int usedItems = Progress.UsedItems.Count;
                 int goldRemaining = Progress.GoldRemaining;
+                int relicChoiceAssignments = Progress.RelicChoiceAssignments.Count;
+                int relicsAvailableAnytime = Progress.RelicRewardsAvailableAnytimeForRun;
 
                 if (ReferenceEquals(_rewardCountProgress, Progress) &&
                     _rewardCountCharacterOffset == characterOffset &&
                     _rewardCountReceivedItems == receivedItems &&
                     _rewardCountUsedItems == usedItems &&
-                    _rewardCountGoldRemaining == goldRemaining)
+                    _rewardCountGoldRemaining == goldRemaining &&
+                    _rewardCountRelicChoiceAssignments == relicChoiceAssignments &&
+                    _rewardCountRelicsAvailableAnytime == relicsAvailableAnytime)
                 {
                     return _cachedAvailableRewardCount;
                 }
@@ -187,6 +194,8 @@ namespace StS2AP
                 _rewardCountReceivedItems = receivedItems;
                 _rewardCountUsedItems = usedItems;
                 _rewardCountGoldRemaining = goldRemaining;
+                _rewardCountRelicChoiceAssignments = relicChoiceAssignments;
+                _rewardCountRelicsAvailableAnytime = relicsAvailableAnytime;
                 _cachedAvailableRewardCount = count;
                 return _cachedAvailableRewardCount;
             }
@@ -847,7 +856,10 @@ namespace StS2AP
 
             settings.AncientRelicLocation = (AncientRelicLocation)Convert.ToInt32(slotData["ancient_relic_location"]);
             settings.AncientRelicPool = (AncientRelicPoolMode)Convert.ToInt32(slotData["ancient_relic_pool"]);
-            settings.RelicChoiceCount = Convert.ToInt32(slotData["relic_choice_count"]);
+            // These keys are one APWorld/client contract. Missing values should reject the slot
+            // instead of silently changing the run's reward rules.
+            settings.RelicRewardsAvailableAnytime = Convert.ToInt32(slotData["relic_rewards_available_anytime"]);
+            settings.ReleaseOnVictory = Convert.ToBoolean(slotData["release_on_victory"]);
 
             if (slotData.ContainsKey("campfire_sanity"))
                 settings.CampfireSanity = Convert.ToInt32(slotData["campfire_sanity"]) != 0;
