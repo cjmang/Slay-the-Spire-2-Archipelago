@@ -230,22 +230,14 @@ namespace StS2AP.Patches
 
                         GameUtility.CurrentPlayer = runState.Players[0];
                         GameUtility.CurrentConfig = ArchipelagoClient.Settings.Characters[GameUtility.CurrentPlayer.getInternalName()];
-                        await Patches_ItemProcessor.ItemLock.WaitAsync();
-                        try
-                        {
-                            ArchipelagoClient.Progress = ArchipelagoProgress.FromSerializable(result, GameUtility.CurrentPlayer);
-                            Patches_ItemProcessor.ReprocessItems();
-                            ArchipelagoClient.Progress.InitializeFromServer(GameUtility.CurrentPlayer);
-                            await NGame.Instance.Transition.FadeOut(0.8f, runState.Players[0].Character.CharacterSelectTransitionPath);
-                            NGame.Instance.ReactionContainer.InitializeNetworking(new NetSingleplayerGameService());
-                            await NGame.Instance.LoadRun(runState, serializableRun.PreFinishedRoom);
-                            await NGame.Instance.Transition.FadeIn();
-                            return;
-                        }
-                        finally
-                        {
-                            Patches.Patches_ItemProcessor.ItemLock.Release();
-                        }
+                        ArchipelagoClient.Progress = ArchipelagoProgress.FromSerializable(result, GameUtility.CurrentPlayer);
+                        Patches_ItemProcessor.ReprocessItems();
+                        ArchipelagoClient.Progress.InitializeFromServer(GameUtility.CurrentPlayer);
+                        await NGame.Instance.Transition.FadeOut(0.8f, runState.Players[0].Character.CharacterSelectTransitionPath);
+                        NGame.Instance.ReactionContainer.InitializeNetworking(new NetSingleplayerGameService());
+                        await NGame.Instance.LoadRun(runState, serializableRun.PreFinishedRoom);
+                        await NGame.Instance.Transition.FadeIn();
+                        return;
                     }
                 }
                 catch (Exception ex)

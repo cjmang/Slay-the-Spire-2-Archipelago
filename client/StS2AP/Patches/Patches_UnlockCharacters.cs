@@ -27,8 +27,6 @@ namespace StS2AP.Patches
             static void Postfix(ref IEnumerable<CharacterModel> __result)
             {
                 LogUtility.Debug($"OverrideUnlockedCharacterData: Overriding unlocked characters. UnlockedCharacters count: {ArchipelagoClient.Progress.UnlockedCharacters.Count}");
-                foreach (var c in ArchipelagoClient.Progress.UnlockedCharacters)
-                    LogUtility.Debug($"OverrideUnlockedCharacterData: Unlocked character in progress: {c.Id.Entry}");
                 __result = ArchipelagoClient.Progress.UnlockedCharacters;
             }
         }

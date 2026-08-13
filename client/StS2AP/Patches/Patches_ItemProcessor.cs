@@ -24,7 +24,8 @@ namespace StS2AP.Patches
 
         private static ConcurrentQueue<IndexedItemInfo> ProcessQueue { get; } = new();
         public static int LastIndexHandled { get; set; }
-        public static SemaphoreSlim ItemLock { get; } = new(1);
+        // Sufficient assuming we're single threaded
+        private static bool Paused { get; set; } = false;
 
         public static event Action<CharacterConfig>? CharacterUnlocked;
         
@@ -49,11 +50,12 @@ namespace StS2AP.Patches
         {
             // Don't want to block, but also don't want to be processing items while a reprocess is going on
             // When the run is finally started, this will get fired on every "tick", for some definition of tick
-            if(ItemLock.CurrentCount == 0)
+            if(Paused)
             {
                 return;
             }
-            if (ProcessQueue.TryDequeue(out var info))
+
+            while (ProcessQueue.TryDequeue(out var info))
             {
                 // If we've already processed this, don't do it again.
                 if(info.Index <= LastIndexHandled)
@@ -359,18 +361,26 @@ namespace StS2AP.Patches
 
         public static void ReprocessItems()
         {
-            ClearQueue();
-            for (
-                global::System.Int32 i = 0;
-                i < ArchipelagoClient.Session.Items.AllItemsReceived.Count;
-                i++
-            )
+            Paused = true;
+            try
             {
-                ItemInfo info = ArchipelagoClient.Session.Items.AllItemsReceived[i];
+                ClearQueue();
+                for (
+                    global::System.Int32 i = 0;
+                    i < ArchipelagoClient.Session.Items.AllItemsReceived.Count;
+                    i++
+                )
+                {
+                    ItemInfo info = ArchipelagoClient.Session.Items.AllItemsReceived[i];
 
-                // i+1 because the index from multiclient .net is essentially 1 based, not 0
-                ProcessItem(new IndexedItemInfo(info, i + 1), false);
-                LastIndexHandled = i + 1;
+                    // i+1 because the index from multiclient .net is essentially 1 based, not 0
+                    ProcessItem(new IndexedItemInfo(info, i + 1), false);
+                    LastIndexHandled = i + 1;
+                }
+            }
+            finally
+            {
+                Paused = false;
             }
         }
 
