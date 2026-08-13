@@ -132,7 +132,6 @@ class TestAscensionDownNumbers(Spire2TestBase):
     def test_has_double_boss(self):
         for item in self.world.multiworld.itempool:
             if item.name == "Silent Disable Double Boss":
-            if 'Double Boss' in item.name:
                 break
         else:
             raise Exception("Failed to find Double Boss")
