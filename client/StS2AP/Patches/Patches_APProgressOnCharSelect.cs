@@ -61,8 +61,7 @@ namespace StS2AP.Patches
                 
                 // Update Ancient Locations
                 var ancientLocations = LocationData.GetAncientRewardLocations(character);
-                var configuredAncients = ArchipelagoClient.Settings.NeowSanity ? 2 : ArchipelagoProgress.MaxConfiguredAncients;
-                SetCheckedLocation(ArchipelagoCharTrackerUI.AncientChecks, ancientLocations, configuredAncients);
+                SetCheckedLocation(ArchipelagoCharTrackerUI.AncientChecks, ancientLocations, ArchipelagoProgress.MaxConfiguredAncients);
 
 
                 // Update Floorsanity Locations
